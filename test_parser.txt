@@ -1,0 +1,21 @@
+import test from testy;
+(
+    Name: import
+    Value: import
+    (
+        Name: name
+        Value: test
+    )
+    (
+        Name: from
+        Value: from
+    )
+    (
+        Name: name
+        Value: testy
+    )
+    (
+        Name: ;
+        Value: ;
+    )
+)

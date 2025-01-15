@@ -1,0 +1,35 @@
+import $[name] _(. $[name])* from $[name] ;
+(
+    Name: import
+    Value: import
+    Repeat: 1 1
+    (
+        Name: name
+        Repeat: 1 1
+        IsReserved: true
+        (
+            Name: Anonymous
+            (
+                Name: .
+                Value: .
+            )
+            (
+                Name: name
+                Value: $[name]
+                IsReserved: true
+            )
+        )
+    )
+    (
+        Name: from
+        Value: from
+    )
+    (
+        Name: name
+        IsReserved: true
+    )
+    (
+        Name: ;
+        Value: ;
+    )
+)
