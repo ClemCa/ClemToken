@@ -1,3 +1,4 @@
+using System.Dynamic;
 using System.Runtime.InteropServices.Marshalling;
 using System.Text.RegularExpressions;
 
@@ -125,6 +126,44 @@ struct Group : Rule
             }
         }
         Repeat = (start, end);
+    }
+}
+
+struct Empty : Rule {
+    public (int, int) Repeat { get; set; }
+    public string Name { get; set; }
+    public string? Value { get; set; }
+    public bool Ignored { get; set; }
+    public Rule[] Children { get; set; }
+    public bool IsReserved { get; set; }
+    public Empty() {
+        Repeat = (0, 0);
+        Name = "Empty";
+        Value = null;
+        Ignored = false;
+        Children = [];
+        IsReserved = false;
+    }
+}
+
+struct ProcessRule : Rule {
+    public (int, int) Repeat { get; set; }
+    public string Name { get; set; }
+    public string? Value { get; set; }
+    public bool Ignored { get; set; }
+    public Rule[] Children { get; set; }
+    public bool IsReserved { get; set; }
+    public int Length { get; set; }
+    public bool Empty { get; set; }
+    public ProcessRule(Rule rule, int length) {
+        Empty = rule is Empty;
+        Length = length;
+        Repeat = rule.Repeat;
+        Name = rule.Name;
+        Value = rule.Value;
+        Ignored = rule.Ignored;
+        Children = rule.Children;
+        IsReserved = rule.IsReserved;
     }
 }
 

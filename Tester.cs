@@ -45,9 +45,12 @@ class Tester
         var text = File.ReadAllText(file);
         int test = 0;
         while(!string.IsNullOrWhiteSpace(text)) {
+            Console.WriteLine("Test " + test);
             test++;
             var (line, tree) = GetPair(ref text);
+            var startTime = DateTime.Now;
             var generatedTree = Parser.Parse(line, rules);
+            Console.WriteLine($"Parsed in {(DateTime.Now - startTime).TotalMilliseconds}ms");
             try {
                 DetailedComparison(generatedTree, tree);
                 Console.WriteLine("Test " + test + " passed");
@@ -55,6 +58,7 @@ class Tester
             catch(Exception e) {
                 Console.WriteLine("Test " + test + " failed: " + e.Message);
             }
+            Console.WriteLine();
         }
     }
     public static void TestGenerator(string file) {
