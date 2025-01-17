@@ -35,18 +35,16 @@ class Parser
                 i++;
                 continue;
             }
-            Console.WriteLine("Step 0");
             var res = MatchRules(code, i, rules);
-            Console.WriteLine("Step 1");
             if (res.Length == 0)
             {
                 var position = CountPosition(code, i);
-                throw new Exception($"No rule matched at line {position.Item1}, column {position.Item2} ({code[i..(i + 10)]} ...)");
+                throw new Exception($"No rule matched at line {position.Item1}, column {position.Item2} ({code[i..Math.Min(code.Length, (i + 10))]} ...)");
             }
-            foreach(var r in res[0]) {
+            foreach (var r in res[0])
+            {
                 tree.Children.Add(RuleToTree(r, ref i));
             }
-            Console.WriteLine("Step 2");
         }
         return tree;
     }
@@ -55,20 +53,25 @@ class Parser
     {
         return code.Select((c, i) => (c, i))
                     .Where(c => c.Item2 < cursor)
-                    .Aggregate((0, 0), (acc, c) => {
-                        if(c.Item1 == '\n') {
+                    .Aggregate((0, 0), (acc, c) =>
+                    {
+                        if (c.Item1 == '\n')
+                        {
                             return (acc.Item1 + 1, 0);
                         }
                         return (acc.Item1, acc.Item2 + 1);
                     });
     }
 
-    private static Tree RuleToTree(Rule rule, ref int cursor) {
-        if(rule.Value != "" && rule.Value != null && !(rule.Value.StartsWith('(') && rule.Value.EndsWith(')'))) {
-            cursor += rule.Value.Length;
+    private static Tree RuleToTree(ProcessRule rule, ref int cursor)
+    {
+        if (rule.Value != "" && rule.Value != null && !(rule.Value.StartsWith('(') && rule.Value.EndsWith(')')))
+        {
+            cursor += rule.Length;
         }
         var subTokens = new List<Tree>();
-        foreach(Rule child in rule.Children) {
+        foreach (ProcessRule child in rule.ProcessChildren)
+        {
             subTokens.Add(RuleToTree(child, ref cursor));
         }
         return new Tree(new Token(rule.Name, rule.Value ?? rule.Name), subTokens);
@@ -81,12 +84,13 @@ class Parser
         {
             if (MatchToken(code, cursor, rule, out ProcessRule[] r) && !(r.Length == 1 && r[0].Empty))
             {
+                Console.WriteLine("Matched rule: " + rule.Name);
                 matchedRules.Add((rule, r));
             }
         }
         if (matchedRules.Count == 0)
         {
-            throw new Exception("No rule matched");
+            return [];
         }
         if (matchedRules.Count > 1)
         {
@@ -96,10 +100,12 @@ class Parser
     }
     private static bool MatchToken(string code, int cursor, Rule rule, out ProcessRule[] modified, int iterations = 1)
     {
-        Console.WriteLine($"Starting {rule.Name} {rule.Value} {cursor}");
         bool match;
         int length = 0;
-        while(cursor+length < code.Length && char.IsWhiteSpace(code[cursor+length])) {
+        modified = [new ProcessRule(rule, length)];
+        modified[0].Children = [];
+        while (cursor + length < code.Length && char.IsWhiteSpace(code[cursor + length]))
+        {
             length++;
         }
         if (rule.Value == "" || rule.Value == null || (rule.Value.StartsWith('(') && rule.Value.EndsWith(')')))
@@ -113,10 +119,11 @@ class Parser
             {
                 case "name":
                     match = true;
-                    while (cursor + length < code.Length && !char.IsWhiteSpace(code[cursor+length]))
+                    while (cursor + length < code.Length && !char.IsWhiteSpace(code[cursor + length]))
                     {
                         length++;
                     }
+                    modified[0].Alternatives = [.. Enumerable.Range(1, length - 1).Select((i) => (code[cursor..(cursor + length - i)], length - i))];
                     break;
                 default:
                     throw new Exception("Unknown reserved token: " + rule.Name);
@@ -126,14 +133,14 @@ class Parser
         {
             match = true;
             int k = 0;
-            while(cursor + k < code.Length - 1 && char.IsWhiteSpace(code[cursor+k])) {
+            while (cursor + k < code.Length - 1 && char.IsWhiteSpace(code[cursor + k]))
+            {
                 k++;
             }
-            Console.WriteLine("starting at " + code[(cursor+k)..]);
             for (int i = 0; i < rule.Value.Length; i++, k++)
             {
-                if(cursor + k >= code.Length) {
-                    Console.WriteLine("EOF (left: " + rule.Value.Substring(i) + ")");
+                if (cursor + k >= code.Length)
+                {
                     match = false;
                     break;
                 }
@@ -145,32 +152,60 @@ class Parser
             }
             length = k;
         }
-        modified = [new ProcessRule(rule, length)];
+        modified[0].Length = length;
         modified[0].Value = code[cursor..(cursor + length)].Trim();
-        if(!match || rule.Children.Count() == 0)
+        if (!match || rule.Children.Count() == 0)
         {
             return match;
         }
+        int prevJ = 0;
         int j = 0;
+        int altMode = 0;
+        bool altEmpty = false;
         bool failureProof = rule.Repeat.Item1 == 0;
         for (int i = 0; i < rule.Children.Count(); i++)
         {
-            Console.WriteLine("Next letter: " + code[cursor+length]+ $"({cursor}, {length})");
-            Console.WriteLine("Parent: " + rule.Name + " " + rule.Value);
-            if (cursor+length >= code.Length)
+            int currentLength = altMode == 0 ? length : length - modified[0].ProcessChildren[prevJ].Length + modified[0].ProcessChildren[prevJ].Alternatives[altMode-1].Item2;
+            if (cursor + currentLength >= code.Length)
             {
-                Console.WriteLine("EOF");
                 modified = [new ProcessRule(new Empty(), 0)];
                 return failureProof;
             }
             var child = rule.Children.ElementAt(i);
-            var childMatch = MatchToken(code, cursor+length, child, out ProcessRule[] r);
+            var childMatch = MatchToken(code, cursor + currentLength, child, out ProcessRule[] r);
+            if(!childMatch || r.Length == 1 && r[0].Empty)
+            {
+                if(j > 0 && j - prevJ == 1) {
+                    // backtracking with self-repetitions is too much of a pain, and anyway it's not worth it for these to have alternatives
+                    // especially considering they can just check for the next child before checking for their own repetition
+                    // this will come with priorities
+                    if(modified[0].ProcessChildren[prevJ].Alternatives.Length > altMode) {
+                        altMode++;
+                        i--;
+                        if(altMode == 1) {
+                            altEmpty = childMatch;
+                        }
+                        continue;
+                    }
+                    altMode = 0;
+                    altEmpty = false;
+                    if (altEmpty) {
+                        continue;
+                    }
+                }
+            }
             if (!childMatch)
             {
-                Console.WriteLine("Parent: " + rule.Name + " " + rule.Value);
                 modified = [new ProcessRule(new Empty(), 0)];
                 return failureProof;
             }
+            if(altMode != 0) {
+                (modified[0].ProcessChildren[prevJ].Value, modified[0].ProcessChildren[prevJ].Length) = modified[0].ProcessChildren[prevJ].Alternatives[altMode-1];
+                length = currentLength;
+                altMode = 0;
+                altEmpty = false;
+            }
+            prevJ = j;
             for (int k = 0; k < r.Length; k++, j++)
             {
                 if (r[k].Empty)
@@ -178,32 +213,23 @@ class Parser
                     j--;
                     continue;
                 }
-                if (modified[0].Children.Length <= j)
-                {
-                    modified[0].Children = [..modified[0].Children, r[k]];
-                }
-                else
-                {
-                    modified[0].Children[j] = r[k];
-                }
+                modified[0].Children = [..modified[0].Children, r[k]];
                 length += r[k].Length;
             }
         }
-        if(iterations < rule.Repeat.Item2 || rule.Repeat.Item2 == -1) {
-            if(MatchToken(code, cursor+length, rule, out ProcessRule[] r, iterations+1)) {
-                modified = [..modified, ..r.Where((r) => !r.Empty)]; // the other iterations are done by recursion
+        if (iterations < rule.Repeat.Item2 || rule.Repeat.Item2 == -1)
+        {
+            if (MatchToken(code, cursor + length, rule, out ProcessRule[] r, iterations + 1))
+            {
+                modified = [.. modified, .. r.Where((r) => !r.Empty)]; // the other iterations are done by recursion
                 return true;
             }
-            if(iterations < rule.Repeat.Item1) {
-                Console.WriteLine("Repetition failed");
+            if (iterations < rule.Repeat.Item1)
+            {
                 return false;
             }
             return true;
         }
         return true;
-    }
-    private static string CleanLineReturn(string code)
-    {
-        return code.Replace("\r\n", "\\n").Replace("\n", "\\n").Replace("\r", "\\r");
     }
 }

@@ -129,14 +129,16 @@ struct Group : Rule
     }
 }
 
-struct Empty : Rule {
+struct Empty : Rule
+{
     public (int, int) Repeat { get; set; }
     public string Name { get; set; }
     public string? Value { get; set; }
     public bool Ignored { get; set; }
     public Rule[] Children { get; set; }
     public bool IsReserved { get; set; }
-    public Empty() {
+    public Empty()
+    {
         Repeat = (0, 0);
         Name = "Empty";
         Value = null;
@@ -146,18 +148,23 @@ struct Empty : Rule {
     }
 }
 
-struct ProcessRule : Rule {
+struct ProcessRule : Rule
+{
     public (int, int) Repeat { get; set; }
     public string Name { get; set; }
     public string? Value { get; set; }
     public bool Ignored { get; set; }
-    public Rule[] Children { get; set; }
+    public Rule[] Children { get => ProcessChildren.Select((c) => c as Rule).ToArray(); set => ProcessChildren = value.Select((r) => r is ProcessRule tar ? tar : new ProcessRule(r, 0)).ToArray(); }
+    public ProcessRule[] ProcessChildren { get; set; }
     public bool IsReserved { get; set; }
     public int Length { get; set; }
     public bool Empty { get; set; }
-    public ProcessRule(Rule rule, int length) {
-        Empty = rule is Empty;
+    public (string, int)[] Alternatives { get; set; }
+    public ProcessRule(Rule rule, int length, (string, int)[] alternatives = null)
+    {
+        Empty = rule is ProcessRule ? ((ProcessRule)rule).Empty : rule is Empty;
         Length = length;
+        Alternatives = alternatives ?? [];
         Repeat = rule.Repeat;
         Name = rule.Name;
         Value = rule.Value;
@@ -224,7 +231,7 @@ partial class Generator
             }
             var ch = ExploreSubgroups(ver.Item2);
             var token = GroupToToken(ver.Item2, ver.Item3, ver.Item4);
-            if(ver.Item5 || token.Item2.Name.Contains(" "))
+            if (ver.Item5 || token.Item2.Name.Contains(" "))
                 token.Item2.Name = "Anonymous";
             token.Item2.Children = ch;
             i += ver.Item2.Length + ver.Item3.Length + ver.Item4.Length;
@@ -237,11 +244,11 @@ partial class Generator
                 Console.WriteLine("Found subgroup: " + token.Item2.Name + $" ({token.Item2.Value})");
                 if (root.Children.Length > 0)
                 {
-                    root.Children[^1].Children = [..root.Children[^1].Children, token.Item2];
+                    root.Children[^1].Children = [.. root.Children[^1].Children, token.Item2];
                 }
                 else
                 {
-                    root.Children = [..root.Children, token.Item2]; // every element after the first is already implicitely a subgroup, but it can be declared explicitly
+                    root.Children = [.. root.Children, token.Item2]; // every element after the first is already implicitely a subgroup, but it can be declared explicitly
                 }
             }
             else
@@ -295,10 +302,11 @@ partial class Generator
                 else
                 {
                     var space = text.IndexOf(' ', i);
-                    if(space == -1)
+                    if (space == -1)
                     {
                         space = text.Length - 1;
-                    } else if (space >= text.Length)
+                    }
+                    else if (space >= text.Length)
                     {
                         space = text.Length - 1;
                     }

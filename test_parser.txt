@@ -1,4 +1,4 @@
-import test from testy ;
+import test from testy;
 (
     Name: Root
     (
