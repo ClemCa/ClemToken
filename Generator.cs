@@ -160,7 +160,7 @@ struct ProcessRule : Rule
     public int Length { get; set; }
     public bool Empty { get; set; }
     public (string, int)[] Alternatives { get; set; }
-    public ProcessRule(Rule rule, int length, (string, int)[] alternatives = null)
+    public ProcessRule(Rule rule, int length, (string, int)[]? alternatives = null)
     {
         Empty = rule is ProcessRule ? ((ProcessRule)rule).Empty : rule is Empty;
         Length = length;
@@ -169,6 +169,7 @@ struct ProcessRule : Rule
         Name = rule.Name;
         Value = rule.Value;
         Ignored = rule.Ignored;
+        ProcessChildren = []; // already set by Children but need to get rid of the warning;
         Children = rule.Children;
         IsReserved = rule.IsReserved;
     }

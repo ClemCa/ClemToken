@@ -7,10 +7,10 @@ class Program
         string text = "";
         if(args.Length < 2)
         {
-            Console.WriteLine("Usage: Tokenizer -f <input> -o <output> | Tokenizer -t <text> | Tokenizer [-test] <input> | Tokenizer [-testP] <input> <grammar>");
+            Console.WriteLine("Usage: Tokenizer -f <input> -o <output> | Tokenizer -t <text> | Tokenizer [-testG] <input> | Tokenizer [-testP] <input> <grammar>");
             return;
         }
-        if(args[0] == "-test")
+        if(args[0] == "-testG")
         {
             Tester.TestGenerator(args[1]);
             return;

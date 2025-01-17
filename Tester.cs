@@ -34,6 +34,7 @@ struct TestingTree {
 class Tester
 {
     public static void TestParser(string file, string grammar) {
+        Console.WriteLine("[Parser Test]");
         if(!File.Exists(file)) {
             throw new Exception("File not found: " + file);
         }
@@ -41,19 +42,31 @@ class Tester
             throw new Exception("File not found: " + grammar);
         }
         var grammarText = File.ReadAllText(grammar);
+        // turn console off
+        var consoleOut = Console.Out;
+        Console.SetOut(TextWriter.Null);
         var rules = Generator.Generate(grammarText);
+        // turn console back on
+        Console.SetOut(consoleOut);
         var text = File.ReadAllText(file);
         int test = 0;
         while(!string.IsNullOrWhiteSpace(text)) {
-            Console.WriteLine("Test " + test);
             test++;
             var (line, tree) = GetPair(ref text);
             var startTime = DateTime.Now;
-            var generatedTree = Parser.Parse(line, rules);
-            Console.WriteLine($"Parsed in {(DateTime.Now - startTime).TotalMilliseconds}ms");
+            Tree generatedTree;
+            Console.SetOut(TextWriter.Null);
+            try {
+                generatedTree = Parser.Parse(line, rules);
+                Console.SetOut(consoleOut);
+            } catch(Exception e) {
+                Console.SetOut(consoleOut);
+                Console.WriteLine("Test " + test + " errored: " + e.Message);
+                continue;
+            }
             try {
                 DetailedComparison(generatedTree, tree);
-                Console.WriteLine("Test " + test + " passed");
+                Console.WriteLine("Test " + test + " passed in " + (DateTime.Now - startTime).TotalMilliseconds + "ms");
             }
             catch(Exception e) {
                 Console.WriteLine("Test " + test + " failed: " + e.Message);
@@ -62,21 +75,27 @@ class Tester
         }
     }
     public static void TestGenerator(string file) {
+        Console.WriteLine("[Generator Test]");
         if(!File.Exists(file)) {
             throw new Exception("File not found: " + file);
         }
         var text = File.ReadAllText(file);
         int test = 0;
+        var consoleOut = Console.Out;
         while(!string.IsNullOrWhiteSpace(text)) {
             test++;
             var (line, tree) = GetPair(ref text);
+            Console.SetOut(TextWriter.Null); // turn console off
+            var start = DateTime.Now;
             var generatedTree = Generator.Generate(line)[0];
             try {
                 DetailedComparison(generatedTree, tree);
-                Console.WriteLine("Test " + test + " passed");
+                Console.SetOut(consoleOut); // turn console back on
+                Console.WriteLine($"Test {test} passed in {(DateTime.Now - start).TotalMilliseconds}ms");
             }
             catch(Exception e) {
-                Console.WriteLine("Test " + test + " failed: " + e.Message);
+                Console.SetOut(consoleOut); // turn console back on
+                Console.WriteLine($"Test {test} failed: {e.Message}");
             }
         }
     }
