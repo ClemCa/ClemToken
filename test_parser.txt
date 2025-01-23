@@ -22,3 +22,49 @@ import test from testy;
         )
     )
 )
+import test.a.b from testy;
+(
+    Name: Root
+    (
+        Name: import
+        Value: import
+        (
+            Name: name
+            Value: test
+            (
+                Name: Anonymous
+                (
+                    Name: .
+                    Value: .
+                )
+                (
+                    Name: name
+                    Value: a
+                )
+            )
+            (
+                Name: Anonymous
+                (
+                    Name: .
+                    Value: .
+                )
+                (
+                    Name: name
+                    Value: b
+                )
+            )
+            (
+                Name: from
+                Value: from
+            )
+            (
+                Name: name
+                Value: testy
+            )
+            (
+                Name: ;
+                Value: ;
+            )
+        )
+    )
+)

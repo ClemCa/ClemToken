@@ -119,11 +119,18 @@ class Parser
             {
                 case "name":
                     match = true;
+                    int original = length;
+                    Console.WriteLine("got here");
                     while (cursor + length < code.Length && !char.IsWhiteSpace(code[cursor + length]))
                     {
                         length++;
                     }
-                    modified[0].Alternatives = [.. Enumerable.Range(1, length - 1).Select((i) => (code[cursor..(cursor + length - i)], length - i))];
+                    Console.WriteLine("no error up to here");
+                    if(original + 2 < length) {
+                        modified[0].Alternatives = [..Enumerable.Range(original + 2, Math.Min(length, code.Length-cursor) - (original + 2)).Select((i) => (code[cursor..(cursor + i)].TrimStart(), i))];
+                    }
+                    Console.WriteLine("neither here");
+                    length = Math.Min(original + 1, code.Length - cursor);
                     break;
                 default:
                     throw new Exception("Unknown reserved token: " + rule.Name);

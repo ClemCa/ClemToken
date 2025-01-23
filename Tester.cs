@@ -121,10 +121,18 @@ class Tester
             Console.WriteLine($"(Test) n:{tree.Name} v:{tree.Value} i:{tree.Ignored} r:{tree.IsReserved} rep:{tree.Repeat} c:{tree.Children.Count}");
             for(int i = 0; i < Math.Max(tree.Children.Count, rule.Children.Count()); i++) {
                 Console.WriteLine("");
-                if(i < tree.Children.Count)
+                if(i < tree.Children.Count) {
                     Console.WriteLine($"  (Test) n:{tree.Children[i].Name} v:{tree.Children[i].Value} i:{tree.Children[i].Ignored} r:{tree.Children[i].IsReserved} rep:{tree.Children[i].Repeat} c:{tree.Children[i].Children.Count}");
-                if(i < rule.Children.Count())
+                    foreach(var c in tree.Children[i].Children) {
+                        Console.WriteLine($"    n:{c.Name} v:{c.Value} i:{c.Ignored} r:{c.IsReserved} rep:{c.Repeat} c:{c.Children.Count}");
+                    }
+                }
+                if(i < rule.Children.Count()) {
                     Console.WriteLine($"  (Rule) n:{rule.Children.ElementAt(i).Name} v:{rule.Children.ElementAt(i).Value} i:{rule.Children.ElementAt(i).Ignored} r:{rule.Children.ElementAt(i).IsReserved} rep:{rule.Children.ElementAt(i).Repeat} c:{rule.Children.ElementAt(i).Children.Count()}");
+                    foreach(var c in rule.Children.ElementAt(i).Children) {
+                        Console.WriteLine($"    n:{c.Name} v:{c.Value} i:{c.Ignored} r:{c.IsReserved} rep:{c.Repeat} c:{c.Children.Count()}");
+                    }
+                }
             }
             throw new Exception($"[Step {step}] Children count mismatch: (Rule) {rule.Children.Count()} != (Test) {tree.Children.Count}");
         }
@@ -133,38 +141,46 @@ class Tester
         }
     }
 
-    static void DetailedComparison(Tree rule, TestingTree tree, int step=0) {
-        if(tree.Name != null && rule.Token.Name != tree.Name) {
-            throw new Exception($"[Step {step}] Name mismatch: (Rule) {rule.Token.Name} != (Test) {tree.Name}");
+    static void DetailedComparison(Tree parsed, TestingTree tree, int step=0) {
+        if(tree.Name != null && parsed.Token.Name != tree.Name) {
+            throw new Exception($"[Step {step}] Name mismatch: (Parsed) {parsed.Token.Name} != (Test) {tree.Name}");
         }
-        if(tree.Value != null && rule.Token.Value != tree.Value) {
-            throw new Exception($"[Step {step}] Value mismatch: (Rule) {rule.Token.Value} != (Test) {tree.Value}");
+        if(tree.Value != null && parsed.Token.Value != tree.Value) {
+            throw new Exception($"[Step {step}] Value mismatch: (Parsed) {parsed.Token.Value} != (Test) {tree.Value}");
         }
-        if(tree.Children.Count != rule.Children.Count) {
-            Console.WriteLine($"(Rule) n:{rule.Token.Name} v:{rule.Token.Value} c:{rule.Children.Count}");
+        if(tree.Children.Count != parsed.Children.Count) {
+            Console.WriteLine($"(Parsed) n:{parsed.Token.Name} v:{parsed.Token.Value} c:{parsed.Children.Count}");
             Console.WriteLine($"(Test) n:{tree.Name} v:{tree.Value} c:{tree.Children.Count}");
-            for(int i = 0; i < Math.Max(tree.Children.Count, rule.Children.Count); i++) {
+            for(int i = 0; i < Math.Max(tree.Children.Count, parsed.Children.Count); i++) {
                 Console.WriteLine("");
-                if(i < tree.Children.Count)
+                if(i < tree.Children.Count) {
                     Console.WriteLine($"  (Test) n:{tree.Children[i].Name} v:{tree.Children[i].Value} c:{tree.Children[i].Children.Count}");
-                if(i < rule.Children.Count)
-                    Console.WriteLine($"  (Rule) n:{rule.Children[i].Token.Name} v:{rule.Children[i].Token.Value} c:{rule.Children[i].Children.Count}");
+                }
+                if(i < parsed.Children.Count) {
+                    Console.WriteLine($"  (Parsed) n:{parsed.Children[i].Token.Name} v:{parsed.Children[i].Token.Value} c:{parsed.Children[i].Children.Count}");
+                }
             }
-            throw new Exception($"[Step {step}] Children count mismatch: (Rule) {rule.Children.Count} != (Test) {tree.Children.Count}");
+            throw new Exception($"[Step {step}] Children count mismatch: (Parsed) {parsed.Children.Count} != (Test) {tree.Children.Count}");
+        }
+        for(int i = 0; i < tree.Children.Count; i++) {
+            DetailedComparison(parsed.Children[i], tree.Children[i], step+1);
         }
     }
 
     static (string, TestingTree) GetPair(ref string text) {
-        var nextLine = text.IndexOf('\n');
-        var line = text.Substring(0, nextLine);
-        text = text.Substring(nextLine + 1);
+        string line;
+        do {
+            var nextLine = text.IndexOf('\n');
+            line = text.Substring(0, nextLine);
+            text = text.Substring(nextLine + 1);
+        } while (line.Trim() == "");
         int i = 0;
         while(i < text.Length && char.IsWhiteSpace(text[i])) i++;
         if(i == text.Length) {
             throw new Exception("Invalid syntax: expected '(', got end of file after " + line);
         }
         if(text[i] != '(') {
-            throw new Exception("Invalid syntax: expected '(', got " + text[i]+ " after " + line);
+            throw new Exception("Invalid syntax: expected '(', got " + text[i..Math.Min(i+10, text.Length)]+ " after " + line);
         }
         TestingTree tree = new();
         int depth = 1;
