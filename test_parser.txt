@@ -53,18 +53,18 @@ import test.a.b from testy;
                     Value: b
                 )
             )
-            (
-                Name: from
-                Value: from
-            )
-            (
-                Name: name
-                Value: testy
-            )
-            (
-                Name: ;
-                Value: ;
-            )
         )
+        (
+            Name: from
+            Value: from
+        )
+        (
+            Name: name
+            Value: testy
+        )
+        (
+            Name: ;
+            Value: ;
+    )
     )
 )

@@ -168,14 +168,15 @@ class Parser
             Console.WriteLine(" -> " + (match ? "+" : "-")+ $" ({rule.Name})");
             return match;
         }
-        int prevJ = 0;
+        int prevJ = -1;
         int j = 0;
         int altMode = 0;
         bool altEmpty = false;
         bool failureProof = rule.Repeat.Item1 == 0;
         for (int i = 0; i < rule.Children.Count(); i++)
         {
-            int currentLength = altMode == 0 ? length : length - modified[0].ProcessChildren[prevJ].Length + modified[0].ProcessChildren[prevJ].Alternatives[altMode-1].Item2;
+            var target = prevJ == -1 ? modified[0] : modified[0].ProcessChildren[prevJ];
+            int currentLength = altMode == 0 ? length : length - target.Length + target.Alternatives[altMode-1].Item2;
             if (cursor + currentLength >= code.Length)
             {
                 modified = [new ProcessRule(new Empty(), 0)];
@@ -184,13 +185,13 @@ class Parser
             }
             var child = rule.Children.ElementAt(i);
             var childMatch = MatchToken(code, cursor + currentLength, child, out ProcessRule[] r);
-            if(!childMatch || r.Length == 1 && r[0].Empty)
+            if(!childMatch || (r.Length == 1 && r[0].Empty))
             {
-                if(j > 0 && j - prevJ == 1) {
+                if(altMode != -1) {
                     // backtracking with self-repetitions is too much of a pain, and anyway it's not worth it for these to have alternatives
                     // especially considering they can just check for the next child before checking for their own repetition
                     // this will come with priorities
-                    if(modified[0].ProcessChildren[prevJ].Alternatives.Length > altMode) {
+                    if(target.Alternatives.Length > altMode) {
                         altMode++;
                         i--;
                         if(altMode == 1) {
@@ -201,7 +202,7 @@ class Parser
                     if (altEmpty) {
                         continue;
                     }
-                    altMode = 0;
+                    altMode = -1;
                     altEmpty = false;
                 }
             }
@@ -211,12 +212,17 @@ class Parser
                 Console.WriteLine(" -> " + (failureProof ? "skip" : "-") + $" ({rule.Name})");
                 return failureProof;
             }
-            if(altMode != 0) {
-                (modified[0].ProcessChildren[prevJ].Value, modified[0].ProcessChildren[prevJ].Length) = modified[0].ProcessChildren[prevJ].Alternatives[altMode-1];
+            if(altMode > 0) {
+                (target.Value, target.Length) = target.Alternatives[altMode-1];
+                if(prevJ == -1) {
+                    modified[0] = target;
+                } else {
+                    modified[0].ProcessChildren[prevJ] = target;
+                }
                 length = currentLength;
-                altMode = 0;
                 altEmpty = false;
-            } // TODO figure things out here where it needs to go to also iterate on failure
+            }
+            altMode = 0; // reset for the next child
             prevJ = j;
             for (int k = 0; k < r.Length; k++, j++)
             {
@@ -225,16 +231,17 @@ class Parser
                     j--;
                     continue;
                 }
-                modified[0].Children = [..modified[0].Children, r[k]];
+                modified[0].ProcessChildren = [..modified[0].ProcessChildren, r[k]];
                 length += r[k].Length;
             }
         }
+        modified[0].Length = length;
         if (iterations < rule.Repeat.Item2 || rule.Repeat.Item2 == -1)
         {
-            if (MatchToken(code, cursor + length, rule, out ProcessRule[] r, iterations + 1))
+            if (MatchToken(code, cursor + length, rule, out ProcessRule[] ruleOut, iterations + 1))
             {
-                modified = [.. modified, .. r.Where((r) => !r.Empty)]; // the other iterations are done by recursion
-                Console.WriteLine(" -> +" + $" ({rule.Name})");
+                modified = [.. modified, .. ruleOut.Where((r) => !r.Empty)]; // the other iterations are done by recursion
+                Console.WriteLine(" -> +" + $" ({rule.Name}:{ruleOut.Select((r) => r.Length.ToString()).Aggregate((a, b) => a + "," + b)})");
                 return true;
             }
             if (iterations < rule.Repeat.Item1)

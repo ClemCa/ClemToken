@@ -57,7 +57,7 @@ class Tester
             var startTime = DateTime.Now;
             Tree generatedTree;
             Console.Out.Flush();
-            // Console.SetOut(TextWriter.Null);
+            Console.SetOut(TextWriter.Null);
             try {
                 generatedTree = Parser.Parse(line, rules);
                 Console.SetOut(consoleOut);
