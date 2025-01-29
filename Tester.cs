@@ -44,6 +44,7 @@ class Tester
         var grammarText = File.ReadAllText(grammar);
         // turn console off
         var consoleOut = Console.Out;
+        Console.Out.Flush();
         Console.SetOut(TextWriter.Null);
         var rules = Generator.Generate(grammarText);
         // turn console back on
@@ -55,7 +56,8 @@ class Tester
             var (line, tree) = GetPair(ref text);
             var startTime = DateTime.Now;
             Tree generatedTree;
-            Console.SetOut(TextWriter.Null);
+            Console.Out.Flush();
+            // Console.SetOut(TextWriter.Null);
             try {
                 generatedTree = Parser.Parse(line, rules);
                 Console.SetOut(consoleOut);
@@ -85,6 +87,7 @@ class Tester
         while(!string.IsNullOrWhiteSpace(text)) {
             test++;
             var (line, tree) = GetPair(ref text);
+            Console.Out.Flush();
             Console.SetOut(TextWriter.Null); // turn console off
             var start = DateTime.Now;
             var generatedTree = Generator.Generate(line)[0];

@@ -39,6 +39,7 @@ class Parser
             if (res.Length == 0)
             {
                 var position = CountPosition(code, i);
+                Console.Out.Flush();
                 throw new Exception($"No rule matched at line {position.Item1}, column {position.Item2} ({code[i..Math.Min(code.Length, (i + 10))]} ...)");
             }
             foreach (var r in res[0])
@@ -86,6 +87,8 @@ class Parser
             {
                 Console.WriteLine("Matched rule: " + rule.Name);
                 matchedRules.Add((rule, r));
+            } else {
+                Console.WriteLine("Rule not matched: " + rule.Name);
             }
         }
         if (matchedRules.Count == 0)
@@ -100,6 +103,7 @@ class Parser
     }
     private static bool MatchToken(string code, int cursor, Rule rule, out ProcessRule[] modified, int iterations = 1)
     {
+        Console.WriteLine("> " + rule.Name);
         bool match;
         int length = 0;
         modified = [new ProcessRule(rule, length)];
@@ -120,16 +124,13 @@ class Parser
                 case "name":
                     match = true;
                     int original = length;
-                    Console.WriteLine("got here");
                     while (cursor + length < code.Length && !char.IsWhiteSpace(code[cursor + length]))
                     {
                         length++;
                     }
-                    Console.WriteLine("no error up to here");
                     if(original + 2 < length) {
-                        modified[0].Alternatives = [..Enumerable.Range(original + 2, Math.Min(length, code.Length-cursor) - (original + 2)).Select((i) => (code[cursor..(cursor + i)].TrimStart(), i))];
+                        modified[0].Alternatives = [..Enumerable.Range(original + 2, Math.Min(length+1, code.Length-cursor) - (original + 2)).Select((i) => (code[cursor..(cursor + i)].TrimStart(), i))];
                     }
-                    Console.WriteLine("neither here");
                     length = Math.Min(original + 1, code.Length - cursor);
                     break;
                 default:
@@ -157,12 +158,14 @@ class Parser
                     break;
                 }
             }
+            Console.WriteLine("match: " + match +" for '"+ code[cursor..Math.Min(code.Length,cursor + rule.Value.Length)] + "' vs '" + rule.Value+"'");
             length = k;
         }
         modified[0].Length = length;
         modified[0].Value = code[cursor..(cursor + length)].Trim();
         if (!match || rule.Children.Count() == 0)
         {
+            Console.WriteLine(" -> " + (match ? "+" : "-")+ $" ({rule.Name})");
             return match;
         }
         int prevJ = 0;
@@ -176,6 +179,7 @@ class Parser
             if (cursor + currentLength >= code.Length)
             {
                 modified = [new ProcessRule(new Empty(), 0)];
+                Console.WriteLine(" -> " + (failureProof ? "skip" : "-") + $" ({rule.Name})");
                 return failureProof;
             }
             var child = rule.Children.ElementAt(i);
@@ -194,16 +198,17 @@ class Parser
                         }
                         continue;
                     }
-                    altMode = 0;
-                    altEmpty = false;
                     if (altEmpty) {
                         continue;
                     }
+                    altMode = 0;
+                    altEmpty = false;
                 }
             }
             if (!childMatch)
             {
                 modified = [new ProcessRule(new Empty(), 0)];
+                Console.WriteLine(" -> " + (failureProof ? "skip" : "-") + $" ({rule.Name})");
                 return failureProof;
             }
             if(altMode != 0) {
@@ -211,7 +216,7 @@ class Parser
                 length = currentLength;
                 altMode = 0;
                 altEmpty = false;
-            }
+            } // TODO figure things out here where it needs to go to also iterate on failure
             prevJ = j;
             for (int k = 0; k < r.Length; k++, j++)
             {
@@ -229,14 +234,18 @@ class Parser
             if (MatchToken(code, cursor + length, rule, out ProcessRule[] r, iterations + 1))
             {
                 modified = [.. modified, .. r.Where((r) => !r.Empty)]; // the other iterations are done by recursion
+                Console.WriteLine(" -> +" + $" ({rule.Name})");
                 return true;
             }
             if (iterations < rule.Repeat.Item1)
             {
+                Console.WriteLine($" -> - (not enough iterations: {iterations} < {rule.Repeat.Item1}) ({rule.Name})");
                 return false;
             }
+            Console.WriteLine(" -> +"+ $" ({rule.Name})");
             return true;
         }
+        Console.WriteLine(" -> +" + $" ({rule.Name})");
         return true;
     }
 }
