@@ -28,7 +28,7 @@ class Parser
     public static Tree Parse(string code, Rule[] rules)
     {
         Tree tree = new Tree(new Token("Root", ""), new List<Tree>());
-        for (int i = 0; i < code.Length; i++)
+        for (int i = 0; i < code.Length;)
         {
             if (char.IsWhiteSpace(code[i]))
             {
@@ -44,7 +44,8 @@ class Parser
             }
             foreach (var r in res[0])
             {
-                tree.Children.Add(RuleToTree(r, ref i));
+                i += r.Length;
+                tree.Children.Add(RuleToTree(r));
             }
         }
         return tree;
@@ -64,22 +65,19 @@ class Parser
                     });
     }
 
-    private static Tree RuleToTree(ProcessRule rule, ref int cursor)
+    private static Tree RuleToTree(ProcessRule rule)
     {
-        if (rule.Value != "" && rule.Value != null && !(rule.Value.StartsWith('(') && rule.Value.EndsWith(')')))
-        {
-            cursor += rule.Length;
-        }
         var subTokens = new List<Tree>();
         foreach (ProcessRule child in rule.ProcessChildren)
         {
-            subTokens.Add(RuleToTree(child, ref cursor));
+            subTokens.Add(RuleToTree(child));
         }
         return new Tree(new Token(rule.Name, rule.Value ?? rule.Name), subTokens);
     }
 
     private static ProcessRule[][] MatchRules(string code, int cursor, Rule[] rules)
     {
+        Console.WriteLine($"Starting root match at {CountPosition(code, cursor)}");
         List<(Rule, ProcessRule[])> matchedRules = new();
         foreach (Rule rule in rules)
         {
@@ -249,10 +247,10 @@ class Parser
                 Console.WriteLine($" -> - (not enough iterations: {iterations} < {rule.Repeat.Item1}) ({rule.Name})");
                 return false;
             }
-            Console.WriteLine(" -> +"+ $" ({rule.Name})");
+            Console.WriteLine(" -> +"+ $" ({rule.Name}:{CountPosition(code, cursor + length)})");
             return true;
         }
-        Console.WriteLine(" -> +" + $" ({rule.Name})");
+        Console.WriteLine(" -> +" + $" ({rule.Name}:{CountPosition(code, cursor + length)})");
         return true;
     }
 }

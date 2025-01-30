@@ -1,0 +1,5 @@
+import test from testy;
+import test.a.b from testy;
+import test .b from testy ;
+import test . b from testy ;
+importtest.bfromtesty;

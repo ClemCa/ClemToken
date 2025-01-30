@@ -60,6 +60,15 @@ struct Group : Rule
     public bool Ignored { get; set; }
     public Rule[] Children { get; set; }
     public bool IsReserved { get; set; }
+    public Group((int, int) repeat, bool ignored)
+    {
+        Repeat = repeat;
+        Name = "In Deserialization";
+        Value = null;
+        Ignored = ignored;
+        Children = [];
+        IsReserved = false;
+    }
     public Group(out bool subgroup, string? value, string? prefix, string? suffix)
     {
         IsReserved = false;

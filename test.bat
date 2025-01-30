@@ -1,12 +1,14 @@
 @echo off
 echo Which test would you like to run?
-echo (A)ll
 echo (G)enerator
 echo (P)arser
+echo (B)oth
+echo (W)riting
+echo (R)eading
 
 set ESC=
 SET "mySeq=<   >%ESC%[1D%ESC%[1D%ESC%[1D%ESC%[1D"
-choice /c GPA /n /m "%mySeq%"
+choice /c GPBWR /n /m "%mySeq%"
 set choice=%errorlevel%
 if %choice%==1 (
     echo Running Generator test...
@@ -15,9 +17,15 @@ if %choice%==1 (
     echo Running Parser test...
     dotnet run -testP test_parser.txt test_grammar.txt
 ) else if %choice%==3 (
-    echo Running all tests...
+    echo Running both tests...
     dotnet run -testG test_generator.txt
     dotnet run -testP test_parser.txt test_grammar.txt
-) else if %choice%==0 (
+) else if %choice%==4 (
+    echo Running Writing test...
+    dotnet run -- -f test_grammar.txt -o test_generated.at
+) else if %choice%==5 (
+    echo Running Reading test...
+    dotnet run -- -f test_generated.at -i test_code.txt
+)else if %choice%==0 (
     exit
 )
