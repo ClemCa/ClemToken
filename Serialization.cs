@@ -3,6 +3,22 @@ namespace ClemToken
 {
     class Serializer
     {
+        public static string StringSerializeTree(Tree tree)
+        {
+            StringBuilder sb = new();
+            StringSerializeTreeSub(tree, sb);
+            return sb.ToString();
+        }
+        private static void StringSerializeTreeSub(Tree tree, StringBuilder stringBuilder) {
+            stringBuilder.AppendLine("(");
+            stringBuilder.AppendLine("name: " + tree.Token.Name);
+            stringBuilder.AppendLine("value: " + tree.Token.Value);
+            foreach (var child in tree.Children)
+            {
+                StringSerializeTreeSub(child, stringBuilder);
+            }
+            stringBuilder.AppendLine(")");
+        }
         public static byte[] Serialize(Rule[] rules)
         {
             List<byte> data =

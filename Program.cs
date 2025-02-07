@@ -108,10 +108,11 @@
                     var rules = Serializer.Deserialize(File.ReadAllBytes(file));
                     var consoleOut = Console.Out;
                     var writer = new StringWriter();
+                    Tree result;
                     Console.SetOut(writer);
                     try
                     {
-                        var result = Parser.Parse(text, rules);
+                        result = Parser.Parse(text, rules);
                     }
                     catch (Exception e)
                     {
@@ -121,7 +122,8 @@
                         return;
                     }
                     Console.SetOut(consoleOut);
-                    // TODO output result one way or another + utility methods for tree traversal
+                    string output = Serializer.StringSerializeTree(result);
+                    Console.Write(output); // output to stdout, the user can redirect it to a file or use it in their program
                 }
                 else
                 {
