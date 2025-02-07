@@ -68,7 +68,9 @@ namespace ClemToken
             var subTokens = new List<Tree>();
             foreach (ProcessRule child in rule.ProcessChildren)
             {
-                subTokens.Add(RuleToTree(child));
+                var childTree = RuleToTree(child);
+                if(child.Ignored) subTokens.AddRange(childTree.Children); // then we flatten the children
+                else subTokens.Add(childTree);
             }
             return new Tree(new Token(rule.Name, rule.Value ?? rule.Name), subTokens);
         }
