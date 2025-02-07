@@ -395,7 +395,7 @@ namespace ClemToken
             {
                 return (true, match.Groups["token"].Value, match.Groups["prefix"].Value, match.Groups["suffix"].Value, match.Groups["subgroup"].Success);
             }
-            else
+            else // TODO subgroup fix + tests
             {
                 return (true, match.Groups["subgroup"].Success || match.Groups["token"].Value.Contains(" ") ? "" : match.Groups["token_suff"].Value, "", match.Groups["solo_suffix"].Value, match.Groups["subgroup"].Success);
             }
@@ -421,15 +421,23 @@ namespace ClemToken
             (
                 ^(?<prefix>[^\(\):\+\*\-]+:_?|_)
                 (?<token>\(
-                    (?:[^:\+\*\-()]|\([^()]*\))
-                    *\)
+                    (?:
+                        [^:\+\*\-()]
+                        |
+                        (?<subgroup>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?)
+                    )*
+                    \)
                 )
-                (?<suffix>\+|\*|\d+(?:-\d+)?|_)?
+                (?<suffix>\+|\*|\d+(?:-\d+)?|_|:)?
                 | (?<token_suff>\(
-                    (?:[^:\+\*\-()]|\([^()]*\))
+                    (?:
+                        [^:\+\*\-()]
+                        |
+                        (?<subgroup>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?)
+                    )
                     *\)
                 )
-                (?<solo_suffix>\+|\*|\d+(?:-\d+)?|_)
+                (?<solo_suffix>\+|\*|\d+(?:-\d+)?|_|:)
             )
             */
         }
@@ -477,7 +485,7 @@ namespace ClemToken
             return text[..index] + replace + text[(index + search.Length)..];
         }
 
-        [GeneratedRegex(@"^(?:(?<prefix>[^\(\):\+\*\-]+:_?|_)(?<token>\((?:[^:\+\*\-()]|(?<subgroup>\(.*\)))*\))(?<suffix>\+|\*|\d+(?:-\d+)?|_)?|(?<token_suff>\((?:[^:\+\*\-()]|\([^()]*\))*\))(?<solo_suffix>\+|\*|\d+(?:-\d+)?|_))")]
+        [GeneratedRegex(@"^(?:(?<prefix>[^\(\):\+\*\-\s]+:_?|_)(?<token>\((?:[^:\+\*\-()]|(?<subgroup>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?))*\))(?<suffix>\+|\*|\d+(?:-\d+)?|_|:)?|(?<token_suff>\((?:[^:\+\*\-()]|(?<subgroup_suff>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?))*\))(?<solo_suffix>\+|\*|\d+(?:-\d+)?|_|:))")]
         private static partial Regex GroupRegex();
     }
 }
