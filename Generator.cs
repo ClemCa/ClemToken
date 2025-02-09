@@ -88,7 +88,7 @@ namespace ClemToken
                 Name = value == null || value == "" ? "Anonymous" : value;
             }
             subgroup = prefix == "_";
-            Value = value;
+            Value = null;
             int start = 1;
             int end = 1;
             if (suffix != null && suffix.Trim() != "")
@@ -110,6 +110,8 @@ namespace ClemToken
                         break;
                     case "_":
                         break;
+                    case "":
+                        break; // already looped
                     default:
                         if (suffix.Contains("-"))
                         {
@@ -131,7 +133,7 @@ namespace ClemToken
                             suffix = suffix.Substring(1);
                             goto redo;
                         }
-                        throw new Exception("Invalid suffix: " + suffix);
+                        throw new Exception("Invalid suffix: " + suffix + " for: " + Name);
                 }
             }
             Repeat = (start, end);
@@ -241,10 +243,10 @@ namespace ClemToken
                 }
                 var ch = ExploreSubgroups(ver.Item2);
                 var token = GroupToToken(ver.Item2, ver.Item3, ver.Item4);
-                if (ver.Item5 || token.Item2.Name.Contains(" "))
+                if (token.Item2.Name.Contains(" ") || token.Item2.Name == token.Item2.Value)
                     token.Item2.Name = "Anonymous";
                 token.Item2.Children = ch;
-                i += ver.Item2.Length + ver.Item3.Length + ver.Item4.Length;
+                i += ver.Item2.Length + ver.Item3.Length + ver.Item4.Length + 2;
                 if (token.Item1)
                 {
                     if (root == null)
@@ -284,7 +286,7 @@ namespace ClemToken
         private static Rule[] ExploreSubgroups(string text)
         {
             List<Rule> rules = new List<Rule>();
-            for (int i = 1; i < text.Length; i++)
+            for (int i = 0; i < text.Length; i++)
             {
                 if (!char.IsWhiteSpace(text[i]))
                 {
@@ -293,13 +295,13 @@ namespace ClemToken
                     {
                         Console.WriteLine($"Found subgroup: {search.Item2}");
                         var (subgroup, token) = GroupToToken(search.Item2, search.Item3, search.Item4);
-                        if (subgroup && rules.Count > 0)
-                        {
-                            throw new Exception("Cannot have a subgroup as the first token of a rule: " + text[i..]);
-                        }
+                        // if (subgroup && rules.Count > 0)
+                        // {
+                        //     throw new Exception("Cannot have a subgroup as the first token of a rule: " + text[i..]);
+                        // }
                         var children = ExploreSubgroups(search.Item2);
                         token.Children = children;
-                        i += search.Item2.Length + search.Item3.Length + search.Item4.Length;
+                        i += search.Item2.Length + search.Item3.Length + search.Item4.Length + 2;
                         if (subgroup)
                         {
                             rules[^1].Children = [..rules[^1].Children, token];
@@ -314,11 +316,11 @@ namespace ClemToken
                         var space = text.IndexOf(' ', i);
                         if (space == -1)
                         {
-                            space = text.Length - 1;
+                            space = text.Length;
                         }
-                        else if (space >= text.Length)
+                        else if (space > text.Length)
                         {
-                            space = text.Length - 1;
+                            space = text.Length;
                         }
                         var (isGroup, tk) = ParseToken(text[i..space]);
                         if (isGroup)
@@ -391,14 +393,34 @@ namespace ClemToken
             {
                 return (false, "", "", "", false);
             }
-            if (match.Groups["token"].Success)
-            {
-                return (true, match.Groups["token"].Value, match.Groups["prefix"].Value, match.Groups["suffix"].Value, match.Groups["subgroup"].Success);
+            var prefix = match.Groups["prefix"].Success ? match.Groups["prefix"].Value : "";
+            var end = text.IndexOf('(');
+            var stack = 0;
+            for(; end < text.Length; end++) {
+                if(text[end] == '(') {
+                    stack++;
+                }
+                if(text[end] == ')') {
+                    stack--;
+                }
+                if(stack == 0) {
+                    break;
+                }
             }
-            else // TODO subgroup fix + tests
-            {
-                return (true, match.Groups["subgroup"].Success || match.Groups["token"].Value.Contains(" ") ? "" : match.Groups["token_suff"].Value, "", match.Groups["solo_suffix"].Value, match.Groups["subgroup"].Success);
+            if(end == text.Length) {
+                end = text.Length - 1;
             }
+            var postfix = end+1;
+            for(; postfix < text.Length; postfix++) {
+                if(text[postfix] == ')' || text[postfix] == ' ') {
+                    break;
+                }
+            }
+            var suffix = text[(end+1)..postfix];
+            var substart = prefix.Length + 1;
+            var subgroup = regex.IsMatch(text[substart..end]);
+            var subline = text[substart..end];
+            return (true, subline, prefix, suffix, subgroup);
             // INVALID: (test)
             // _(test)
             // (test)+
@@ -433,7 +455,7 @@ namespace ClemToken
                     (?:
                         [^:\+\*\-()]
                         |
-                        (?<subgroup>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?)
+                        (?<subgroup_suff>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?)
                     )
                     *\)
                 )

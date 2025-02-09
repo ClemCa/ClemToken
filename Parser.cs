@@ -38,7 +38,7 @@ namespace ClemToken
                 {
                     var position = CountPosition(code, i);
                     Console.Out.Flush();
-                    throw new Exception($"No rule matched at line {position.Item1}, column {position.Item2} ({code[i..Math.Min(code.Length, (i + 10))]} ...)");
+                    throw new Exception($"No rule matched at line {position.Item1}, column {position.Item2} ({code[i..Math.Min(code.Length, i + 20)]} ...)");
                 }
                 foreach (var r in res[0])
                 {
@@ -112,7 +112,7 @@ namespace ClemToken
             {
                 length++;
             }
-            if (rule.Value == "" || rule.Value == null || (rule.Value.StartsWith('(') && rule.Value.EndsWith(')')))
+            if (rule.Value == "" || rule.Value == null)
             {
                 match = true;
                 length = 0; // pure groups don't take space

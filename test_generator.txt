@@ -33,3 +33,48 @@ import $[name] _(. $[name])* from $[name] ;
         Value: ;
     )
 )
+import:(import target:($[name] dot:_(. $[name])* )+ target:((,): $[name])* ) ;
+(
+    Name: import
+    (
+        Name: import
+        Value: import
+    )
+    (
+        Name: target
+        Repeat: 1 -1
+        (
+            Name: name
+            (
+                Name: dot
+                Repeat: 0 -1
+                (
+                    Name: .
+                    Value: .
+                )
+                (
+                    Name: name
+                    Value: $[name]
+                )
+            )
+        )
+    )
+    (
+        Name: target
+        Repeat: 0 -1
+        (
+            Ignored: true
+            (
+                Name: ,
+                Value: ,
+            )
+        )
+        (
+            Name: name
+        )
+    )
+    (
+        Name: ;
+        Value: ;
+    )
+)

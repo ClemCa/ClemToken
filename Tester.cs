@@ -89,8 +89,8 @@ namespace ClemToken
                 catch (Exception e)
                 {
                     Console.WriteLine("Test " + test + " failed: " + e.Message);
+                    Console.WriteLine();
                 }
-                Console.WriteLine();
             }
         }
         public static void TestGenerator(string file)
