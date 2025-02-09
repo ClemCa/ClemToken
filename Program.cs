@@ -1,7 +1,14 @@
 ﻿namespace ClemToken
 {
-    public class ClemToken
+    public static class Utils
     {
+        private static Rule[]? preloadedRules;
+        public static void ToGrammar(this string grammar, string path) => GenerateGrammar(grammar, path);
+        public static void ToGrammar(this string grammar, BinaryWriter writer) => GenerateGrammar(grammar, writer);
+        public static void PreloadAsGrammar(this string path) => PreloadGrammar(path);
+        public static Navigator ParseWith(this string text, string grammarPath) => Parse(text, grammarPath);
+        public static Navigator ParseWith(this string text, BinaryReader reader) => Parse(text, reader);
+        public static Navigator Parse(this string text) => Parse(text);
         public static void GenerateGrammar(string grammar, string path)
         {
             var rules = Generator.Generate(grammar);
@@ -13,6 +20,10 @@
             var rules = Generator.Generate(grammar);
             var bytes = Serializer.Serialize(rules);
             writer.Write(bytes);
+        }
+        public static void PreloadGrammar(string path)
+        {
+            preloadedRules = Serializer.Deserialize(File.ReadAllBytes(path));
         }
         public static Navigator Parse(string text, string grammarPath)
         {
@@ -27,6 +38,15 @@
             // so I'd need to implement streaming deserialization
             // byte arrays are also limited to less than int max value, so I couldn't compound it if I wanted to
             var tree = Parser.Parse(text, rules);
+            return new Navigator(tree);
+        }
+        public static Navigator ParsePreloaded(string text)
+        {
+            if (preloadedRules == null)
+            {
+                throw new InvalidOperationException("No grammar has been preloaded");
+            }
+            var tree = Parser.Parse(text, preloadedRules);
             return new Navigator(tree);
         }
     }
