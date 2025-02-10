@@ -165,13 +165,29 @@ namespace ClemToken
         public string Name { get; set; }
         public string? Value { get; set; }
         public bool Ignored { get; set; }
-        public Rule[] Children { get => ProcessChildren.Select((c) => c as Rule).ToArray(); set => ProcessChildren = value.Select((r) => r is ProcessRule tar ? tar : new ProcessRule(r, 0)).ToArray(); }
+        public Rule[] Children
+        {
+            get => ProcessChildren.Select((c) => c as Rule).ToArray(); set
+            {
+                int line = Line;
+                int column = Column;
+                ProcessChildren = [..value.Select((c) => {
+                return c switch {
+                    ProcessRule pr => pr,
+                    Rule r => new ProcessRule(r, r.Value?.Length ?? 0, line, column),
+                    _ => throw new Exception("Invalid type: " + c.GetType().Name)
+                };
+            })];
+            }
+        }
         public ProcessRule[] ProcessChildren { get; set; }
         public bool IsReserved { get; set; }
         public int Length { get; set; }
         public bool Empty { get; set; }
+        public int Line { get; set; }
+        public int Column { get; set; }
         public (string, int)[] Alternatives { get; set; }
-        public ProcessRule(Rule rule, int length, (string, int)[]? alternatives = null)
+        public ProcessRule(Rule rule, int length, int line, int column, (string, int)[]? alternatives = null)
         {
             Empty = rule is ProcessRule ? ((ProcessRule)rule).Empty : rule is Empty;
             Length = length;
@@ -180,9 +196,16 @@ namespace ClemToken
             Name = rule.Name;
             Value = rule.Value;
             Ignored = rule.Ignored;
-            ProcessChildren = []; // already set by Children but need to get rid of the warning;
-            Children = rule.Children;
+            ProcessChildren = [..rule.Children.Select((c) => {
+                return c switch {
+                    ProcessRule pr => pr,
+                    Rule r => new ProcessRule(r, r.Value?.Length ?? 0, line, column),
+                    _ => throw new Exception("Invalid type: " + c.GetType().Name)
+                };
+            })];
             IsReserved = rule.IsReserved;
+            Line = line;
+            Column = column;
         }
     }
 
@@ -237,7 +260,7 @@ namespace ClemToken
                     }
                     else
                     {
-                        root.Children = [..root.Children, tk];
+                        root.Children = [.. root.Children, tk];
                     }
                     continue;
                 }
@@ -256,11 +279,11 @@ namespace ClemToken
                     Console.WriteLine("Found subgroup: " + token.Item2.Name + $" ({token.Item2.Value})");
                     if (root.Children.Length > 0)
                     {
-                        root.Children[^1].Children = [..root.Children[^1].Children, token.Item2];
+                        root.Children[^1].Children = [.. root.Children[^1].Children, token.Item2];
                     }
                     else
                     {
-                        root.Children = [..root.Children, token.Item2]; // every element after the first is already implicitely a subgroup, but it can be declared explicitly
+                        root.Children = [.. root.Children, token.Item2]; // every element after the first is already implicitely a subgroup, but it can be declared explicitly
                     }
                 }
                 else
@@ -272,7 +295,7 @@ namespace ClemToken
                     }
                     else
                     {
-                        root.Children = [..root.Children, token.Item2];
+                        root.Children = [.. root.Children, token.Item2];
                     }
                 }
             }
@@ -304,7 +327,7 @@ namespace ClemToken
                         i += search.Item2.Length + search.Item3.Length + search.Item4.Length + 2;
                         if (subgroup)
                         {
-                            rules[^1].Children = [..rules[^1].Children, token];
+                            rules[^1].Children = [.. rules[^1].Children, token];
                         }
                         else
                         {
@@ -333,7 +356,7 @@ namespace ClemToken
                     }
                 }
             }
-            return [..rules];
+            return [.. rules];
         }
         private static (bool, Rule) GroupToToken(string value, string prefix, string suffix)
         {
@@ -396,27 +419,34 @@ namespace ClemToken
             var prefix = match.Groups["prefix"].Success ? match.Groups["prefix"].Value : "";
             var end = text.IndexOf('(');
             var stack = 0;
-            for(; end < text.Length; end++) {
-                if(text[end] == '(') {
+            for (; end < text.Length; end++)
+            {
+                if (text[end] == '(')
+                {
                     stack++;
                 }
-                if(text[end] == ')') {
+                if (text[end] == ')')
+                {
                     stack--;
                 }
-                if(stack == 0) {
+                if (stack == 0)
+                {
                     break;
                 }
             }
-            if(end == text.Length) {
+            if (end == text.Length)
+            {
                 end = text.Length - 1;
             }
-            var postfix = end+1;
-            for(; postfix < text.Length; postfix++) {
-                if(text[postfix] == ')' || text[postfix] == ' ') {
+            var postfix = end + 1;
+            for (; postfix < text.Length; postfix++)
+            {
+                if (text[postfix] == ')' || text[postfix] == ' ')
+                {
                     break;
                 }
             }
-            var suffix = text[(end+1)..postfix];
+            var suffix = text[(end + 1)..postfix];
             var substart = prefix.Length + 1;
             var subgroup = regex.IsMatch(text[substart..end]);
             var subline = text[substart..end];

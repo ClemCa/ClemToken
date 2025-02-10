@@ -14,7 +14,9 @@ namespace ClemToken
     {
         public string Name;
         public string Value;
-        public Token(string name, string value)
+        public int Line;
+        public int Column;
+        public Token(string name, string value, int line, int column)
         {
             Name = name;
             Value = value;
@@ -25,7 +27,7 @@ namespace ClemToken
     {
         public static Tree Parse(string code, Rule[] rules)
         {
-            Tree tree = new Tree(new Token("Root", ""), new List<Tree>());
+            Tree tree = new Tree(new Token("Root", "", 0, 0), new List<Tree>());
             for (int i = 0; i < code.Length;)
             {
                 if (char.IsWhiteSpace(code[i]))
@@ -72,7 +74,7 @@ namespace ClemToken
                 if(child.Ignored) subTokens.AddRange(childTree.Children); // then we flatten the children
                 else subTokens.Add(childTree);
             }
-            return new Tree(new Token(rule.Name, rule.Value ?? rule.Name), subTokens);
+            return new Tree(new Token(rule.Name, rule.Value ?? rule.Name, rule.Line, rule.Column), subTokens);
         }
 
         private static ProcessRule[][] MatchRules(string code, int cursor, Rule[] rules)
@@ -106,7 +108,8 @@ namespace ClemToken
             Console.WriteLine("> " + rule.Name);
             bool match;
             int length = 0;
-            modified = [new ProcessRule(rule, length)];
+            var position = CountPosition(code, cursor);
+            modified = [new ProcessRule(rule, length, position.Item1, position.Item2)];
             modified[0].Children = [];
             while (cursor + length < code.Length && char.IsWhiteSpace(code[cursor + length]))
             {
@@ -180,7 +183,8 @@ namespace ClemToken
                 int currentLength = altMode == 0 ? length : length - target.Length + target.Alternatives[altMode - 1].Item2;
                 if (cursor + currentLength >= code.Length)
                 {
-                    modified = [new ProcessRule(new Empty(), 0)];
+                    var pos = CountPosition(code, cursor + currentLength);
+                    modified = [new ProcessRule(new Empty(), 0, position.Item1, position.Item2)];
                     Console.WriteLine(" -> " + (failureProof ? "skip" : "-") + $" ({rule.Name})");
                     return failureProof;
                 }
@@ -213,7 +217,8 @@ namespace ClemToken
                 }
                 if (!childMatch)
                 {
-                    modified = [new ProcessRule(new Empty(), 0)];
+                    var pos = CountPosition(code, cursor + currentLength);
+                    modified = [new ProcessRule(new Empty(), 0, position.Item1, position.Item2)];
                     Console.WriteLine(" -> " + (failureProof ? "skip" : "-") + $" ({rule.Name})");
                     return failureProof;
                 }
