@@ -31,6 +31,7 @@ namespace ClemToken
         {
             History = [(tree, 0)];
         }
+        public int Children => Tree.Children.Count;
         public bool Has(string name)
         {
             foreach (var child in Tree.Children)
