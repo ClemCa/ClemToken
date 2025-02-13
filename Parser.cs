@@ -25,8 +25,17 @@ namespace ClemToken
 
     class Parser
     {
+        private static Dictionary<string, Rule> anchors = new();
         public static Tree Parse(string code, Rule[] rules)
         {
+            anchors.Clear();
+            foreach (Rule rule in rules)
+            {
+                if (rule is Anchor anchor)
+                {
+                    anchors[anchor.Name] = anchor.Children[0];
+                }
+            }
             Tree tree = new Tree(new Token("Root", "", 0, 0), new List<Tree>());
             for (int i = 0; i < code.Length;)
             {
@@ -115,10 +124,10 @@ namespace ClemToken
             {
                 length++;
             }
-            if (rule.Value == "" || rule.Value == null)
+            if (rule.Value == "" || rule.Value == null || rule is Anchor)
             {
                 match = true;
-                length = 0; // pure groups don't take space
+                length = 0; // pure groups and anchors don't take space
             }
             else if (rule.IsReserved)
             {
@@ -142,13 +151,23 @@ namespace ClemToken
                 }
             }
             else if (rule is Reference) {
-                match = code[cursor] == '@';
-                if(match) {
-                    if(rule.Name != code[cursor..Math.Min(cursor + rule.Name.Length, code.Length)]) {
-                        match = false;
-                    } else {
-                        length = rule.Name.Length;
+                // not passing cursor + length just in case when we implement required spaces ($[space]) later
+                match = MatchToken(code, cursor, anchors[rule.Name], out ProcessRule[] r, iterations);
+                if (match)
+                {
+                    modified = r;
+                    foreach(var ru in r) {
+                        cursor += ru.Length;
+                        if(cursor >= code.Length) break;
+                        while (cursor < code.Length && char.IsWhiteSpace(code[cursor]))
+                        {
+                            cursor++;
+                        }
                     }
+                    Console.WriteLine($" -> + ({rule.Name})");
+                } else {
+                    Console.WriteLine($" -> - (@{rule.Name})");
+                    return false;
                 }
             }
             else

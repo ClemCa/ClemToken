@@ -23,7 +23,7 @@ namespace ClemToken
         {
             List<byte> data =
             [
-                ..BitConverter.GetBytes((short)2), // version (2: added references)
+                ..BitConverter.GetBytes((short)2), // version (2: added references & anchors)
             ];
             foreach (var rule in rules)
             {
@@ -76,9 +76,14 @@ namespace ClemToken
                 data.AddRange(BitConverter.GetBytes(group.Repeat.Item2));
                 data.Add(group.Ignored ? (byte)1 : (byte)0); // Ignored
             }
-            else if (rule is Reference reference)
+            else if (rule is Reference)
             {
+                data.Add(3); // Reference
                 // no need, name is already serialized
+            } else if (rule is Anchor)
+            {
+                data.Add(4); // Anchor
+                // name is already serialized
             }
             else
             {
@@ -149,6 +154,18 @@ namespace ClemToken
                         rule = new Reference("@"+refName);
                         return rule;
                     }
+                case 4: // Anchor
+                    {
+                        string anchorName = "";
+                        while (data[cursor] != 0) // we don't want the name to be read after the constructor
+                        {
+                            anchorName += (char)data[cursor];
+                            cursor++;
+                        }
+                        cursor++;
+                        rule = new Anchor(anchorName);
+                        goto children; // anchor does not have extra data
+                    }
                 default:
                     throw new Exception("Invalid rule type encountered during deserialization: " + type);
             }
@@ -159,9 +176,10 @@ namespace ClemToken
                 cursor++;
             }
             cursor++;
+            rule.Name = name;
+            children:
             int childrenCount = BitConverter.ToInt32(data.AsSpan()[cursor..(cursor + 4)]);
             cursor += 4;
-            rule.Name = name;
             rule.Children = new Rule[childrenCount];
             for (int i = 0; i < childrenCount; i++)
             {

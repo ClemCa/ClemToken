@@ -27,7 +27,7 @@ namespace ClemToken
                 this.Ignored = changeTree.Ignored ?? this.Ignored;
                 this.IsReserved = changeTree.IsReserved ?? this.IsReserved;
                 this.Repeat = changeTree.Repeat ?? this.Repeat;
-                this.Children = [..this.Children, ..changeTree.Children ?? []];
+                this.Children = [.. this.Children, .. changeTree.Children ?? []];
                 return this;
             }
             if (this.Children.Count == 0 || (depth == 1 && changeTree.Name == null && changeTree.Value == null && changeTree.Ignored == null && changeTree.IsReserved == null && changeTree.Repeat == null))
@@ -216,13 +216,32 @@ namespace ClemToken
         static (string, TestingTree) GetPair(ref string text)
         {
             string line;
-            do
-            {
-                var nextLine = text.IndexOf('\n');
-                line = text.Substring(0, nextLine);
-                text = text.Substring(nextLine + 1);
-            } while (line.Trim() == "");
             int i = 0;
+            while (i < text.Length && char.IsWhiteSpace(text[i]))
+            {
+                i++;
+            }
+            if (text[i..].StartsWith("```"))
+            {
+                i += 3;
+                var end = text.IndexOf("```", i);
+                if (end == -1)
+                {
+                    throw new Exception("Invalid syntax: expected '```', got end of file after " + text[i..]);
+                }
+                line = text[i..end];
+                text = text.Substring(end + 3);
+                i = 0;
+            }
+            else
+            {
+                do {
+                    var nextLine = text.IndexOf('\n');
+                    line = text.Substring(0, nextLine);
+                    text = text.Substring(nextLine + 1);
+                } while (line.Trim() == "");
+                i = 0;
+            }
             while (i < text.Length && char.IsWhiteSpace(text[i])) i++;
             if (i == text.Length)
             {

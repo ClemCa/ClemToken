@@ -71,7 +71,25 @@ namespace ClemToken
             IsReserved = false;
         }
     }
-
+    struct Anchor: Rule {
+        public (int, int) Repeat { get; set; }
+        public string Name { get; set; }
+        public string? Value { get; set; }
+        public bool Ignored { get; set; }
+        public Rule[] Children { get; set; }
+        public bool IsReserved { get; set; }
+        public Anchor(string value)
+        {
+            int start = value.IndexOf('@');
+            int end = value.IndexOf(':');
+            Name = value.Substring(start + 1, end - start - 1);
+            Value = value;
+            Repeat = (1, 1);
+            Ignored = false;
+            Children = [];
+            IsReserved = false;
+        }
+    }
     struct Group : Rule
     {
         public (int, int) Repeat { get; set; }
@@ -234,7 +252,7 @@ namespace ClemToken
         private string[] reserved = ["name"];
         public static Rule[] Generate(string grammar)
         {
-            string[] parts = Split(grammar);
+            string[] parts = [..Split(grammar).Select((p) => p.Trim()).Where((p) => p != "")];
             List<Rule> rules = new List<Rule>();
             foreach (var part in parts)
             {
@@ -243,9 +261,30 @@ namespace ClemToken
             return rules.ToArray();
         }
 
-        private static Rule ParseLine(string line)
+        private static Rule ParseLine(string line, bool noAnchor = false)
         {
             Rule? root = null;
+            string anchor = "";
+            if(line.StartsWith("@")) {
+                for(int i = 0; i < line.Length; i++) {
+                    if(char.IsWhiteSpace(line[i])) {
+                        break;
+                    }
+                    if(line[i] == ':') {
+                        anchor = line[..(i+1)];
+                        break;
+                    }
+                }
+            }
+            if(anchor != "") {
+                if(noAnchor) {
+                    throw new Exception("Rule cannot have more than one anchor: " + anchor);
+                }
+                Console.WriteLine("Found anchor: " + anchor);
+                root = new Anchor(anchor);
+                root.Children = [ParseLine(line[(anchor.Length + 1)..], true)];
+                return root;
+            }
             for (int i = 0; i < line.Length; i++)
             {
                 if (char.IsWhiteSpace(line[i]))
@@ -273,6 +312,10 @@ namespace ClemToken
                     else if (tk is Reference)
                     {
                         Console.WriteLine("Found reference: " + acc);
+                    }
+                    else if (tk is Anchor)
+                    {
+                        throw new Exception("Anchors are not authorized in the middle of a rule: " + acc);
                     }
                     else
                     {
@@ -325,7 +368,7 @@ namespace ClemToken
             }
             if (root == null)
             {
-                throw new Exception("No tokens found in line: " + line);
+                throw new Exception("No tokens found in line (length "+line.Length+"): " + line);
             }
             return root;
         }
@@ -393,6 +436,9 @@ namespace ClemToken
             if (token.StartsWith('(') && token.EndsWith(')'))
             {
                 isGroup = false; // the sole exception
+            }
+            else if (token.StartsWith("@") && token.EndsWith(":")) {
+                return (false, new Anchor(token));
             }
             else if (token.Contains(':'))
             {

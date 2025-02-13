@@ -78,3 +78,39 @@ import:(import target:($[name] dot:_(. $[name])* )+ target:((,): $[name])* ) ;
         Value: ;
     )
 )
+```
+import @identifier _(. @identifier)* from @identifier ;
+@identifier: $[name]
+```
+(
+    Name: import
+    Value: import
+    (
+        Name: identifier
+        Value: @identifier
+        (
+            Name: Anonymous
+            Repeat: 0 -1
+            (
+                Name: .
+                Value: .
+            )
+            (
+                Name: identifier
+                Value: @identifier
+            )
+        )
+    )
+    (
+        Name: from
+        Value: from
+    )
+    (
+        Name: identifier
+        Value: @identifier
+    )
+    (
+        Name: ;
+        Value: ;
+    )
+)
