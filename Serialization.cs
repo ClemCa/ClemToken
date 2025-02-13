@@ -23,8 +23,8 @@ namespace ClemToken
         {
             List<byte> data =
             [
-                ..BitConverter.GetBytes((short)1), // version
-        ];
+                ..BitConverter.GetBytes((short)2), // version (2: added references)
+            ];
             foreach (var rule in rules)
             {
                 SerializeRule(rule, ref data);
@@ -66,6 +66,7 @@ namespace ClemToken
                 data.Add(1); // Reserved
                 data.AddRange(Encoding.UTF8.GetBytes(reserved.Value ?? "")); // Value
                 data.Add(0); // null terminator
+                return;
             }
             else if (rule is Group group)
             {
@@ -74,6 +75,10 @@ namespace ClemToken
                 data.AddRange(BitConverter.GetBytes(group.Repeat.Item1)); // Repeat
                 data.AddRange(BitConverter.GetBytes(group.Repeat.Item2));
                 data.Add(group.Ignored ? (byte)1 : (byte)0); // Ignored
+            }
+            else if (rule is Reference reference)
+            {
+                // no need, name is already serialized
             }
             else
             {
@@ -131,6 +136,18 @@ namespace ClemToken
                         cursor++;
                         rule = new Group((repeat1, repeat2), ignored);
                         break;
+                    }
+                case 3: // Reference
+                    {
+                        string refName = "";
+                        while (data[cursor] != 0)
+                        {
+                            refName += (char)data[cursor];
+                            cursor++;
+                        }
+                        cursor++;
+                        rule = new Reference("@"+refName);
+                        return rule;
                     }
                 default:
                     throw new Exception("Invalid rule type encountered during deserialization: " + type);

@@ -52,6 +52,26 @@ namespace ClemToken
         }
     }
 
+    struct Reference: Rule
+    {
+        public (int, int) Repeat { get; set; }
+        public string Name { get; set; }
+        public string? Value { get; set; }
+        public bool Ignored { get; set; }
+        public Rule[] Children { get; set; }
+        public bool IsReserved { get; set; }
+        public Reference(string value)
+        {
+            int start = value.IndexOf('@');
+            Name = value.Substring(start + 1);
+            Value = value;
+            Repeat = (1, 1);
+            Ignored = false;
+            Children = [];
+            IsReserved = false;
+        }
+    }
+
     struct Group : Rule
     {
         public (int, int) Repeat { get; set; }
@@ -250,6 +270,10 @@ namespace ClemToken
                     {
                         Console.WriteLine("Found reserved token: " + acc);
                     }
+                    else if (tk is Reference)
+                    {
+                        Console.WriteLine("Found reference: " + acc);
+                    }
                     else
                     {
                         Console.WriteLine("Found token: " + acc);
@@ -391,6 +415,10 @@ namespace ClemToken
                 {
                     return (subgroup, group);
                 }
+            }
+            if(token.StartsWith("@") && token.Length > 1)
+            {
+                return (false, new Reference(token));
             }
             if (token.StartsWith("$[") && token.EndsWith(']'))
             {

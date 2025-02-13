@@ -141,6 +141,16 @@ namespace ClemToken
                         throw new Exception("Unknown reserved token: " + rule.Name);
                 }
             }
+            else if (rule is Reference) {
+                match = code[cursor] == '@';
+                if(match) {
+                    if(rule.Name != code[cursor..Math.Min(cursor + rule.Name.Length, code.Length)]) {
+                        match = false;
+                    } else {
+                        length = rule.Name.Length;
+                    }
+                }
+            }
             else
             {
                 match = true;
