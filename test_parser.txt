@@ -3,18 +3,26 @@ import test from testy;
     Name: Root
     (
         Name: import
-        Value: import
+        Value: import test from testy;
         (
-            Name: name
+            Name: identifier
             Value: test
+            (
+                Name: name
+                Value: test
+            )
         )
         (
             Name: from
             Value: from
         )
         (
-            Name: name
+            Name: identifier
             Value: testy
+            (
+                Name: name
+                Value: testy
+            )
         )
         (
             Name: ;
@@ -27,30 +35,46 @@ import test.a.b from testy;
     Name: Root
     (
         Name: import
-        Value: import
+        Value: import test.a.b from testy;
         (
-            Name: name
-            Value: test
+            Name: identifier
+            Value: test.a.b
             (
-                Name: Anonymous
-                (
-                    Name: .
-                    Value: .
-                )
-                (
-                    Name: name
-                    Value: a
-                )
+                Name: name
+                Value: test
             )
             (
-                Name: Anonymous
+                Name: Anonymous*
+                Value: .a.b
                 (
-                    Name: .
-                    Value: .
+                    Name: Anonymous
+                    Value: .a
+                    (
+                        Value: .
+                    )
+                    (
+                        Name: identifier
+                        Value: a
+                        (
+                            Name: name
+                            Value: a
+                        )
+                    )
                 )
                 (
-                    Name: name
-                    Value: b
+                    Name: Anonymous
+                    Value: .b
+                    (
+                        Value: .
+                    )
+                    (
+                        Name: identifier
+                        Value: b
+                        (
+                            Name: name
+                            Value: b
+                        )
+                    )
                 )
             )
         )
@@ -59,12 +83,16 @@ import test.a.b from testy;
             Value: from
         )
         (
-            Name: name
+            Name: identifier
             Value: testy
+            (
+                Name: name
+                Value: testy
+            )
         )
         (
             Name: ;
             Value: ;
-    )
+        )
     )
 )

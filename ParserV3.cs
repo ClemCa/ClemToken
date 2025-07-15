@@ -11,9 +11,9 @@ class ParserV3
         ReferenceStore referenceStore = new ReferenceStore();
         foreach (var rule in rules)
         {
-            Console.WriteLine($"Adding rule: {rule.Name} ({rule.GetType().Name})");
             referenceStore.AddIfReferenceable(rule);
         }
+        Console.WriteLine(Serializer.DisplayRules(rules));
         return Parse(code, rules, referenceStore);
     }
     static Tree ExpandLastNode(Tree target, string code, int by = 1)
@@ -126,6 +126,7 @@ class ParserV3
         }
         var addressedTree = WithCoordinates(tree);
         addressedTree = CleanIgnored(addressedTree);
+        // Console.WriteLine($"Parsed tree: {Serializer.StringSerializeTree(addressedTree)}");
         return addressedTree;
     }
 
@@ -151,6 +152,21 @@ class ParserV3
     {
         newCursor = cursor;
         expandLimit = 0;
+        bool NonGroupChildrenCheck(Rule target, int startCursor, out int newCursor, out Tree? ruleTree, out int expandLimit)
+        {
+            if (SingleGroupCheck(code, startCursor, new Group((1, 1), target.Name, false, target.Children), referenceStore, out newCursor, out ruleTree, out expandLimit))
+            {
+                if (ruleTree == null)
+                {
+                    return true; // Anchor matched but no tree created
+                }
+                var rt = ruleTree.Value;
+                rt.Token.Name = target.Name;
+                ruleTree = rt;
+                return true; // Anchor matched
+            }
+            return false;
+        }
         switch (rule)
         {
             case Anchor anchor:
@@ -160,23 +176,11 @@ class ParserV3
                     ruleTree = null;
                     return true;
                 }
-                if (SingleGroupCheck(code, cursor, new Group((1, 1), anchor.Name, false, anchor.Children), referenceStore, out newCursor, out ruleTree, out expandLimit))
-                {
-                    if (ruleTree == null)
-                    {
-                        return true; // Anchor matched but no tree created
-                    }
-                    var rt = ruleTree.Value;
-                    rt.Token.Name = anchor.Name;
-                    ruleTree = rt;
-                    return true; // Anchor matched
-                }
-                return false;
+                return NonGroupChildrenCheck(anchor, cursor, out newCursor, out ruleTree, out expandLimit);
             case Simple simple:
                 if (simple.Value == null)
                 {
-                    ruleTree = simple.Ignored ? null : new Tree(new Token(simple.Name, "", cursor, 0, simple.Ignored), new List<Tree>());
-                    return true; // Empty simple rule matches any position
+                    throw new Exception("Empty simple rule");
                 }
                 for (int i = 0; i < simple.Value.Length; i++)
                 {
@@ -186,10 +190,20 @@ class ParserV3
                         return false;
                     }
                 }
-                newCursor = cursor + simple.Value.Length;
-                ruleTree = simple.Ignored ? null : new Tree(new Token(simple.Name, simple.Value, cursor, 0, simple.Ignored), new List<Tree>());
-                return true;
+                bool ngSuccess = NonGroupChildrenCheck(simple, cursor + simple.Value.Length, out newCursor, out ruleTree, out expandLimit);
+                if (ngSuccess && ruleTree.HasValue)
+                {
+                    var rt = ruleTree.Value;
+                    rt.Token.Value = code[cursor..(cursor + simple.Value.Length)] + rt.Token.Value;
+                    rt.Token.Line = cursor;
+                    ruleTree = rt;
+                }
+                return ngSuccess;
             case Reserved reserved:
+                if (reserved.Children.Length > 0)
+                {
+                    throw new Exception("Reserved rules with children are not supported in this version of the parser.");
+                }
                 if (cursor >= code.Length)
                 {
                     ruleTree = null;
@@ -199,10 +213,10 @@ class ParserV3
                 {
                     case "name":
                         if (char.IsWhiteSpace(code[cursor]))
-                            {
-                                ruleTree = null;
-                                return false;
-                            }
+                        {
+                            ruleTree = null;
+                            return false;
+                        }
                         newCursor = cursor + 1; // just one for the minimum
                         ruleTree = new Tree(new Token("name", code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
                         while ((newCursor + expandLimit) < code.Length && (!char.IsWhiteSpace(code[newCursor + expandLimit])))
@@ -216,6 +230,10 @@ class ParserV3
             case Group group:
                 return CheckGroup(code, cursor, group, referenceStore, out newCursor, out ruleTree, out expandLimit);
             case Reference reference:
+                if(reference.Children.Length > 0)
+                {
+                    throw new Exception("References with children are not supported in this version of the parser.");
+                }
                 var referenceRule = referenceStore.GetReference(reference.Name);
                 bool success = Check(code, cursor, referenceRule, referenceStore, out newCursor, out ruleTree, out expandLimit);
                 return success;

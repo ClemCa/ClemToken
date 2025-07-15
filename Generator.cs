@@ -270,7 +270,7 @@ namespace ClemToken
             return rules.ToArray();
         }
 
-        private static Rule ParseLine(string line, bool noAnchor = false)
+        private static Rule ParseLine(string line, bool inAnchor = false)
         {
             Rule? root = null;
             string anchor = "";
@@ -286,7 +286,7 @@ namespace ClemToken
                 }
             }
             if(anchor != "") {
-                if(noAnchor) {
+                if(inAnchor) {
                     throw new Exception("Rule cannot have more than one anchor: " + anchor);
                 }
                 Console.WriteLine("Found anchor: " + anchor);

@@ -10,31 +10,31 @@ namespace ClemToken
             StringSerializeTreeSub(tree, sb);
             return sb.ToString();
         }
-        private static void StringSerializeTreeSub(Tree tree, StringBuilder stringBuilder) {
-            stringBuilder.AppendLine("(");
-            stringBuilder.AppendLine("name: " + tree.Token.Name);
-            stringBuilder.AppendLine("value: " + tree.Token.Value);
+        private static void StringSerializeTreeSub(Tree tree, StringBuilder stringBuilder, int depth = 0) {
+            stringBuilder.AppendLine(new string(' ', depth * 2) + "(");
+            stringBuilder.AppendLine(new string(' ', depth * 2 + 2) + "name: " + tree.Token.Name);
+            stringBuilder.AppendLine(new string(' ', depth * 2 + 2) + "value: " + tree.Token.Value);
             foreach (var child in tree.Children)
             {
-                StringSerializeTreeSub(child, stringBuilder);
+                StringSerializeTreeSub(child, stringBuilder, depth + 1);
             }
-            stringBuilder.AppendLine(")");
+            stringBuilder.AppendLine(new string(' ', depth * 2) + ")");
         }
-        public static string StringSerializeRules(Rule[] rules)
+        public static string DisplayRules(Rule[] rules)
         {
             StringBuilder sb = new();
             foreach (var rule in rules)
             {
-                StringSerializeRule(rule, sb);
+                DisplayRule(rule, sb);
             }
             return sb.ToString();
         }
-        public static void StringSerializeRule(Rule rule, StringBuilder stringBuilder, int depth = 0)
+        public static void DisplayRule(Rule rule, StringBuilder stringBuilder, int depth = 0)
         {
-            stringBuilder.AppendLine(new string(' ', depth * 2) + rule.Name);
+            stringBuilder.AppendLine(new string(' ', depth * 2) + rule.Name+ " (" + rule.GetType().Name+";"+rule.Value + ")");
             foreach (var child in rule.Children)
             {
-                StringSerializeRule(child, stringBuilder, depth + 1);
+                DisplayRule(child, stringBuilder, depth + 1);
             }
         }
         public static byte[] Serialize(Rule[] rules)

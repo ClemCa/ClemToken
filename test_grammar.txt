@@ -1,2 +1,2 @@
-import @identifier _(. @identifier)* from @identifier ;
+import @identifier (. @identifier)* from @identifier ;
 @identifier: $[name]
