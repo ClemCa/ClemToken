@@ -28,7 +28,7 @@
         public static Navigator Parse(string text, string grammarPath)
         {
             var rules = Serializer.Deserialize(File.ReadAllBytes(grammarPath));
-            var tree = Parser.Parse(text, rules);
+            var tree = ParserV3.Parse(text, rules);
             return new Navigator(tree);
         }
         public static Navigator Parse(string text, BinaryReader reader)
@@ -37,7 +37,7 @@
             // length would wrap if the file is too big, but at that point there's no looping solution with a binary reader (the position argument is int)
             // so I'd need to implement streaming deserialization
             // byte arrays are also limited to less than int max value, so I couldn't compound it if I wanted to
-            var tree = Parser.Parse(text, rules);
+            var tree = ParserV3.Parse(text, rules);
             return new Navigator(tree);
         }
         public static Navigator ParsePreloaded(string text)
@@ -46,7 +46,7 @@
             {
                 throw new InvalidOperationException("No grammar has been preloaded");
             }
-            var tree = Parser.Parse(text, preloadedRules);
+            var tree = ParserV3.Parse(text, preloadedRules);
             return new Navigator(tree);
         }
     }
@@ -55,6 +55,7 @@
     {
         static void Main(string[] args)
         {
+            Console.WriteLine("ClemToken");
             if (args.Length < 2)
             {
                 Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in | Tokenizer [-testG] <input> | Tokenizer [-testP] <input> <grammar>");
@@ -132,7 +133,7 @@
                     Console.SetOut(writer);
                     try
                     {
-                        result = Parser.Parse(text, rules);
+                        result = ParserV3.Parse(text, rules);
                     }
                     catch (Exception e)
                     {

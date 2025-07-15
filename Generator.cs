@@ -39,14 +39,14 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
-        public Reserved(string value)
+        public Reserved(string value, bool ignored = false)
         {
             int start = value.IndexOf('[');
             int end = value.IndexOf(']');
             Name = value.Substring(start + 1, end - start - 1);
             Value = value;
             Repeat = (1, 1);
-            Ignored = false;
+            Ignored = ignored;
             Children = [];
             IsReserved = true;
         }
@@ -78,7 +78,7 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
-        public Anchor(string value)
+        public Anchor(string value, Rule[]? children = null)
         {
             int start = value.IndexOf('@');
             int end = value.IndexOf(':');
@@ -86,7 +86,7 @@ namespace ClemToken
             Value = value;
             Repeat = (1, 1);
             Ignored = false;
-            Children = [];
+            Children = children ?? [];
             IsReserved = false;
         }
     }
@@ -105,6 +105,15 @@ namespace ClemToken
             Value = null;
             Ignored = ignored;
             Children = [];
+            IsReserved = false;
+        }
+        public Group((int, int) repeat, string name, bool ignored, Rule[] children)
+        {
+            Repeat = repeat;
+            Name = name;
+            Value = null;
+            Ignored = ignored;
+            Children = children;
             IsReserved = false;
         }
         public Group(out bool subgroup, string? value, string? prefix, string? suffix)

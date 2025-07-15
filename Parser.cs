@@ -16,10 +16,14 @@ namespace ClemToken
         public string Value;
         public int Line;
         public int Column;
-        public Token(string name, string value, int line, int column)
+        public bool Ignored;
+        public Token(string name, string value, int line, int column, bool ignored = false)
         {
             Name = name;
             Value = value;
+            Line = line;
+            Column = column;
+            Ignored = ignored;
         }
     }
 

@@ -3,6 +3,7 @@ namespace ClemToken
 {
     class Serializer
     {
+        private const int Version = 3; // current version of the serialization format
         public static string StringSerializeTree(Tree tree)
         {
             StringBuilder sb = new();
@@ -19,17 +20,34 @@ namespace ClemToken
             }
             stringBuilder.AppendLine(")");
         }
+        public static string StringSerializeRules(Rule[] rules)
+        {
+            StringBuilder sb = new();
+            foreach (var rule in rules)
+            {
+                StringSerializeRule(rule, sb);
+            }
+            return sb.ToString();
+        }
+        public static void StringSerializeRule(Rule rule, StringBuilder stringBuilder, int depth = 0)
+        {
+            stringBuilder.AppendLine(new string(' ', depth * 2) + rule.Name);
+            foreach (var child in rule.Children)
+            {
+                StringSerializeRule(child, stringBuilder, depth + 1);
+            }
+        }
         public static byte[] Serialize(Rule[] rules)
         {
             List<byte> data =
             [
-                ..BitConverter.GetBytes((short)2), // version (2: added references & anchors)
+                ..BitConverter.GetBytes((short)Version), // version (3: implicit groups no longer supported)
             ];
             foreach (var rule in rules)
             {
                 SerializeRule(rule, ref data);
             }
-            return [..data];
+            return [.. data];
         }
 
         public static Rule[] Deserialize(byte[] data)
@@ -40,9 +58,9 @@ namespace ClemToken
             }
             List<Rule> rules = new();
             int version = BitConverter.ToInt16(data.AsSpan()[0..2]);
-            if (version != 1)
+            if (version != Version)
             {
-                throw new Exception("Incompatible serialization version, expected 1, got " + version);
+                throw new Exception($"Incompatible serialization version, expected {Version}, got " + version);
             }
             int i = 2;
             while (i < data.Length)

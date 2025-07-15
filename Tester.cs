@@ -69,16 +69,16 @@ namespace ClemToken
                 var startTime = DateTime.Now;
                 Tree generatedTree;
                 Console.Out.Flush();
-                Console.SetOut(TextWriter.Null);
+                // Console.SetOut(TextWriter.Null);
                 try
                 {
-                    generatedTree = Parser.Parse(line, rules);
+                    generatedTree = ParserV3.Parse(line, rules);
                     Console.SetOut(consoleOut);
                 }
                 catch (Exception e)
                 {
                     Console.SetOut(consoleOut);
-                    Console.WriteLine("Test " + test + " errored: " + e.Message);
+                    Console.WriteLine("Test " + test + " errored: " + e.Message+ "\n"+e.StackTrace);
                     continue;
                 }
                 try
