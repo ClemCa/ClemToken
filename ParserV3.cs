@@ -191,6 +191,16 @@ class ParserV3
                 }
                 Console.WriteLine($"Checking anchor: {anchor.Name} at cursor: {cursor}, expand: {expandAllowed}");
                 return NonGroupChildrenCheck(anchor, cursor, expandAllowed, out newCursor, out ruleTree, out expandLimit);
+            case Optional optional:
+                foreach (var child in optional.Children)
+                {
+                    if (Check(code, cursor, expandAllowed, child, referenceStore, out newCursor, out ruleTree, out expandLimit))
+                    {
+                        return true;
+                    }
+                }
+                ruleTree = null;
+                return false;
             case Simple simple:
                 if (simple.Value == null)
                 {

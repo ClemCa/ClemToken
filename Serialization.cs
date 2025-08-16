@@ -137,6 +137,7 @@ namespace ClemToken
                 Group => 2,
                 Reference => 3,
                 Anchor => 4,
+                Optional => 5,
                 _ => -1
             };
             type = Mirror(type, bytes);
@@ -173,6 +174,10 @@ namespace ClemToken
                     a.Name = Mirror(a.Name, bytes);
                     rule = a;
                     goto children; // anchor does not have extra data
+                case 5:
+                    Optional o = rule is Optional optional ? optional : new();
+                    rule = o;
+                    goto children; // optional does not have extra data
                 default:
                     throw new Exception($"Unknown rule type: {rule.GetType().Name} ({type})");
             }

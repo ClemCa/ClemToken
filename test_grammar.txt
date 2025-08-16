@@ -1,2 +1,14 @@
 import @identifier (. @identifier)* from @identifier ;
+@declaration: [var|@type] @identifier = @expression ;
+
+
+@expression: [@literal | @identifier | @call] ;
+
+
+
+
+
+
+
+
 @identifier: $[name]

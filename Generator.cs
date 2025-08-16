@@ -90,6 +90,23 @@ namespace ClemToken
             IsReserved = false;
         }
     }
+    struct Optional : Rule
+    {
+        public (int, int) Repeat { get; set; }
+        public string Name { get; set; }
+        public string? Value { get; set; }
+        public bool Ignored { get; set; }
+        public Rule[] Children { get; set; }
+        public bool IsReserved { get; set; }
+        public Optional(Rule[]? options = null)
+        {
+            Name = "Optional";
+            Ignored = false;
+            Repeat = (1, 1);
+            IsReserved = false;
+            Children = options ?? [];
+        }
+    }
     struct Group : Rule
     {
         public (int, int) Repeat { get; set; }
@@ -426,6 +443,16 @@ namespace ClemToken
                         {
                             throw new Exception("Group was misdetected, this is a bug: " + text[i..]);
                         }
+                        if (tk is Optional)
+                        {
+                            int closingBracket = text.IndexOf(']', i);
+                            if (closingBracket == -1)
+                            {
+                                throw new Exception("Unmatched opening bracket in optional: " + text[i..Math.Min(i + 10, text.Length)]);
+                            }
+                            tk = ExploreOptional(text[(i + 1)..closingBracket]);
+                            tk.Value = text[i..(closingBracket + 1)];
+                        }
                         Console.WriteLine("Found token: " + tk.Name);
                         i += tk.Value?.Length ?? tk.Name.Length;
                         rules.Add(tk);
@@ -433,6 +460,27 @@ namespace ClemToken
                 }
             }
             return [.. rules];
+        }
+        private static Rule ExploreOptional(string text)
+        {
+            var optional = new Optional();
+            string[] split = text.Split(" | ");
+            List<Rule> options = new List<Rule>();
+            foreach (var part in split)
+            {
+                Rule[] ch = ExploreSubgroups(part);
+                if (ch.Length > 1)
+                {
+                    throw new Exception("Optional can only have one child per branch: " + part);
+                }
+                if (ch.Length == 0)
+                {
+                    throw new Exception("Optional cannot have an empty branch: " + part);
+                }
+                options.Add(ch[0]);
+            }
+            optional.Children = [..options];
+            return optional;
         }
         private static (bool, Rule) GroupToToken(string value, string prefix, string suffix)
         {
@@ -446,8 +494,13 @@ namespace ClemToken
             {
                 isGroup = false; // the sole exception
             }
-            else if (token.StartsWith("@") && token.EndsWith(":")) {
+            else if (token.StartsWith("@") && token.EndsWith(":"))
+            {
                 return (false, new Anchor(token));
+            }
+            else if (token.StartsWith("[") && !char.IsWhiteSpace(token[1]) && !token.Contains('|') || !token.Contains(']'))
+            {
+                return (false, new Optional());
             }
             else if (token.Contains(':'))
             {
