@@ -192,7 +192,7 @@ namespace ClemToken
             }
             if (tree.Value != null && parsed.Token.Value != tree.Value)
             {
-                throw new Exception($"[Step {step}] Value mismatch: (Parsed) {parsed.Token.Value} != (Test) {tree.Value}");
+                throw new Exception($"[Step {step}] Value mismatch: (Parsed) {parsed.Token.Value} != (Test) {tree.Value} --- {parsed.Token.Name}");
             }
             if (tree.Children.Count != parsed.Children.Count)
             {

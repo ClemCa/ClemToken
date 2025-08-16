@@ -1,7 +1,7 @@
 ClemToken
 (
   name: Root
-  value:
+  value: 
   (
     name: statement
     value: import test from testy;
@@ -267,179 +267,55 @@ ClemToken
     )
   )
   (
-    name: declaration
-    value: var code = "
+    name: statement
+    value: var code = "hello world";
     (
-      name: var
-      value: var
-    )
-    (
-      name: identifier
-      value: code
+      name: declaration
+      value: var code = "hello world"
       (
-        name: name
-        value: code
+        name: var
+        value: var
       )
-    )
-    (
-      name: =
-      value: =
-    )
-    (
-      name: expression
-      value:  "
       (
         name: identifier
-        value: "
+        value: code
         (
           name: name
-          value: "
+          value: code
+        )
+      )
+      (
+        name: =
+        value: =
+      )
+      (
+        name: expression
+        value: "hello world"
+        (
+          name: literal
+          value: "hello world"
+          (
+            name: string
+            value: "hello world"
+            (
+              name: "
+              value: "
+            )
+            (
+              name: content
+              value: hello world
+            )
+            (
+              name: "
+              value: "
+            )
+          )
         )
       )
     )
-  )
-  (
-    name: expression
-    value: h
     (
-      name: identifier
-      value: h
-      (
-        name: name
-        value: h
-      )
-    )
-  )
-  (
-    name: expression
-    value: e
-    (
-      name: identifier
-      value: e
-      (
-        name: name
-        value: e
-      )
-    )
-  )
-  (
-    name: expression
-    value: l
-    (
-      name: identifier
-      value: l
-      (
-        name: name
-        value: l
-      )
-    )
-  )
-  (
-    name: expression
-    value: l
-    (
-      name: identifier
-      value: l
-      (
-        name: name
-        value: l
-      )
-    )
-  )
-  (
-    name: expression
-    value: o
-    (
-      name: identifier
-      value: o
-      (
-        name: name
-        value: o
-      )
-    )
-  )
-  (
-    name: expression
-    value: w
-    (
-      name: identifier
-      value: w
-      (
-        name: name
-        value: w
-      )
-    )
-  )
-  (
-    name: expression
-    value: o
-    (
-      name: identifier
-      value: o
-      (
-        name: name
-        value: o
-      )
-    )
-  )
-  (
-    name: expression
-    value: r
-    (
-      name: identifier
-      value: r
-      (
-        name: name
-        value: r
-      )
-    )
-  )
-  (
-    name: expression
-    value: l
-    (
-      name: identifier
-      value: l
-      (
-        name: name
-        value: l
-      )
-    )
-  )
-  (
-    name: expression
-    value: d
-    (
-      name: identifier
-      value: d
-      (
-        name: name
-        value: d
-      )
-    )
-  )
-  (
-    name: expression
-    value: "
-    (
-      name: identifier
-      value: "
-      (
-        name: name
-        value: "
-      )
-    )
-  )
-  (
-    name: expression
-    value: ;
-    (
-      name: identifier
+      name: ;
       value: ;
-      (
-        name: name
-        value: ;
-      )
     )
   )
   (
@@ -507,7 +383,7 @@ ClemToken
     )
     (
       name: expression
-      value:  (
+      value: (
       (
         name: identifier
         value: (
@@ -567,219 +443,59 @@ ClemToken
     )
   )
   (
-    name: expression
-    value: L
+    name: statement
+    value: Log("hello world");
     (
-      name: identifier
-      value: L
+      name: call
+      value: Log("hello world")
       (
-        name: name
-        value: L
+        name: identifier
+        value: Log
+        (
+          name: name
+          value: Log
+        )
       )
-    )
-  )
-  (
-    name: expression
-    value: o
-    (
-      name: identifier
-      value: o
       (
-        name: name
-        value: o
-      )
-    )
-  )
-  (
-    name: expression
-    value: g
-    (
-      name: identifier
-      value: g
-      (
-        name: name
-        value: g
-      )
-    )
-  )
-  (
-    name: expression
-    value: (
-    (
-      name: identifier
-      value: (
-      (
-        name: name
+        name: (
         value: (
       )
-    )
-  )
-  (
-    name: expression
-    value: "
-    (
-      name: identifier
-      value: "
       (
-        name: name
-        value: "
+        name: arguments
+        value: "hello world"
+        (
+          name: expression
+          value: "hello world"
+          (
+            name: literal
+            value: "hello world"
+            (
+              name: string
+              value: "hello world"
+              (
+                name: "
+                value: "
+              )
+              (
+                name: content
+                value: hello world
+              )
+              (
+                name: "
+                value: "
+              )
+            )
+          )
+        )
       )
-    )
-  )
-  (
-    name: expression
-    value: h
-    (
-      name: identifier
-      value: h
       (
-        name: name
-        value: h
-      )
-    )
-  )
-  (
-    name: expression
-    value: e
-    (
-      name: identifier
-      value: e
-      (
-        name: name
-        value: e
-      )
-    )
-  )
-  (
-    name: expression
-    value: l
-    (
-      name: identifier
-      value: l
-      (
-        name: name
-        value: l
-      )
-    )
-  )
-  (
-    name: expression
-    value: l
-    (
-      name: identifier
-      value: l
-      (
-        name: name
-        value: l
-      )
-    )
-  )
-  (
-    name: expression
-    value: o
-    (
-      name: identifier
-      value: o
-      (
-        name: name
-        value: o
-      )
-    )
-  )
-  (
-    name: expression
-    value: w
-    (
-      name: identifier
-      value: w
-      (
-        name: name
-        value: w
-      )
-    )
-  )
-  (
-    name: expression
-    value: o
-    (
-      name: identifier
-      value: o
-      (
-        name: name
-        value: o
-      )
-    )
-  )
-  (
-    name: expression
-    value: r
-    (
-      name: identifier
-      value: r
-      (
-        name: name
-        value: r
-      )
-    )
-  )
-  (
-    name: expression
-    value: l
-    (
-      name: identifier
-      value: l
-      (
-        name: name
-        value: l
-      )
-    )
-  )
-  (
-    name: expression
-    value: d
-    (
-      name: identifier
-      value: d
-      (
-        name: name
-        value: d
-      )
-    )
-  )
-  (
-    name: expression
-    value: "
-    (
-      name: identifier
-      value: "
-      (
-        name: name
-        value: "
-      )
-    )
-  )
-  (
-    name: expression
-    value: )
-    (
-      name: identifier
-      value: )
-      (
-        name: name
+        name: )
         value: )
       )
     )
-  )
-  (
-    name: expression
-    value: ;
     (
-      name: identifier
+      name: ;
       value: ;
-      (
-        name: name
-        value: ;
-      )
     )
   )
   (

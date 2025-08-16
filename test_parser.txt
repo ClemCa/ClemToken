@@ -209,3 +209,59 @@ importtest.bfromtesty;
         )
     )
 )
+var code = "hello world";
+(
+    Name: Root
+    (
+        Name: statement
+        Value: var code = "hello world";
+        (
+            Name: declaration
+            Value: var code = "hello world"
+            (
+                Name: var
+                Value: var
+            )
+            (
+                Name: identifier
+                Value: code
+                (
+                    Name: name
+                    Value: code
+                )
+            )
+            (
+                Name: =
+                Value: =
+            )
+            (
+                Name: expression
+                Value: "hello world"
+                (
+                    Name: literal
+                    Value: "hello world"
+                    (
+                        Name: string
+                        Value: "hello world"
+                        (
+                            Name: "
+                            Value: "
+                        )
+                        (
+                            Name: content
+                            Value: hello world
+                        )
+                        (
+                            Name: "
+                            Value: "
+                        )
+                    )
+                )
+            )
+        )
+        (
+            Name: ;
+            Value: ;
+        )
+    )
+)

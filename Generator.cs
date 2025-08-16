@@ -575,9 +575,9 @@ namespace ClemToken
             {
                 return (false, new Reference(token));
             }
-            if (token.StartsWith("$[") && token.EndsWith(']'))
+            if ((token.StartsWith("$[") || token.StartsWith("$$[")) && token.EndsWith(']'))
             {
-                return (false, new Reserved(token));
+                return (false, new Reserved(token, token.StartsWith("$$[")));
             }
             return (false, new Simple(token));
         }
@@ -720,7 +720,7 @@ namespace ClemToken
             return text[..index] + replace + text[(index + search.Length)..];
         }
 
-        [GeneratedRegex(@"^(?:(?<prefix>[^\(\):\+\*\-\s]+:_?|_)(?<token>\((?:[^:\+\*\-()]|(?<subgroup>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?))*\))(?<suffix>\+|\*|\d+(?:-\d+)?|_|:)?|(?<token_suff>\((?:[^:\+\*\-()]|(?<subgroup_suff>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?))*\))(?<solo_suffix>\+|\*|\d+(?:-\d+)?|_|:))")]
+        [GeneratedRegex(@"^(?:(?<prefix>[^\(\):\+\*\-\s]+:_?|_)(?<token>\((?:[^:\+\*\-()]|(?<subgroup>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\):?(?:\+|\*|\d+(?:-\d+)?|_|:)?))*\))(?<suffix>\+|\*|\d+(?:-\d+)?|_|:)?|(?<token_suff>\((?:[^:\+\*\-()]|(?<subgroup_suff>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?))*\))(?<solo_suffix>\+|\*|\d+(?:-\d+)?|_|:))")]
         private static partial Regex GroupRegex();
     }
 }

@@ -6,7 +6,7 @@
 @declaration: [var | @type] @identifier = @expression
 
 ## SUB
-@expression: [@literal | @identifier | @call | @lambda]
+@expression: [@literal | @call | @lambda | @identifier]
 @arguments: @expression (, @expression)*
 
 ## FUNCS
@@ -15,7 +15,7 @@
 
 ## VALUES
 @literal: [@string | @number | @boolean]
-@string: " content:(($[name]):*) "
+@string: " content:(($$[greedy]):) "
 @boolean: [true | false]
 
 ### NUMBERS

@@ -6,7 +6,12 @@ namespace ClemToken
 {
     class Serializer
     {
-        private const int Version = 4; // current version of the serialization format
+        //! 1: initial version
+        //! 2: added references & anchors
+        //! 3: implicit groups no longer supported
+        //! 4: use of two-way serialization & generic marshaling
+        //! 5: ignored for reserved
+        private const int Version = 4;
         public static string StringSerializeTree(Tree tree)
         {
             StringBuilder sb = new();
@@ -98,7 +103,7 @@ namespace ClemToken
         public static byte[] Serialize(Rule[] rules)
         {
             ByteBuffer bytes = new(writeMode: true);
-            bytes.Add(BitConverter.GetBytes((short)Version)); // version (4: use of two-way serialization & generic marshaling)
+            bytes.Add(BitConverter.GetBytes((short)Version));
             for (int i = 0; i < rules.Length; i++)
             {
                 Console.WriteLine($"Serializing rule {i + 1} of {rules.Length}");
@@ -154,6 +159,7 @@ namespace ClemToken
                     if (bytes.WriteMode)
                         r.Value = $"[{r.Name}]";
                     r.Children = [];
+                    r.Ignored = Mirror(r.Ignored, bytes);
                     return r;
                 case 2:
                     Group g = rule is Group group ? group : new();
