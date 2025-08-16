@@ -11,6 +11,7 @@
 
 ## FUNCS
 @call: @identifier ( (@arguments):? )
+###################TODO################### FIX LAMBDAS, will need generator dumps to know what's wrong
 @lambda: [inline:(( (@arguments):? ) => @expression) | long:(( (@arguments):? ) => { body:(@statement)* })]
 
 ## VALUES
