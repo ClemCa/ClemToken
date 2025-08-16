@@ -88,8 +88,11 @@
                     }
                     string output = args[3];
                     string grammar = File.ReadAllText(file);
+                    var consoleOut = Console.Out;
+                    Console.SetOut(TextWriter.Null); // turn console off to avoid cluttering the output
                     var result = Generator.Generate(grammar);
                     var bytes = Serializer.Serialize(result);
+                    Console.SetOut(consoleOut); // turn console back on
                     File.WriteAllBytes(output, bytes);
                     return;
                 }
@@ -126,8 +129,9 @@
                             Console.WriteLine("Usage: Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in");
                             return;
                     }
-                    var rules = Serializer.Deserialize(File.ReadAllBytes(file));
                     var consoleOut = Console.Out;
+                    Console.SetOut(TextWriter.Null); // turn console off to avoid cluttering the output
+                    var rules = Serializer.Deserialize(File.ReadAllBytes(file));
                     var writer = new StringWriter();
                     Tree result;
                     Console.SetOut(writer);

@@ -78,16 +78,21 @@ namespace ClemToken
                 catch (Exception e)
                 {
                     Console.SetOut(consoleOut);
+                    // string used_grammar = Serializer.DisplayRules(rules);
+                    // Console.WriteLine("Used grammar:\n" + used_grammar);
                     Console.WriteLine("Test " + test + " errored: " + e.Message+ "\n"+e.StackTrace);
                     continue;
                 }
                 try
                 {
+                    var time = DateTime.Now - startTime;
                     DetailedComparison(generatedTree, tree);
-                    Console.WriteLine("Test " + test + " passed in " + (DateTime.Now - startTime).TotalMilliseconds + "ms");
+                    Console.WriteLine("Test " + test + " passed in " + time.TotalMilliseconds + "ms");
                 }
                 catch (Exception e)
                 {
+                    // string used_grammar = Serializer.DisplayRules(rules);
+                    // Console.WriteLine("Used grammar:\n" + used_grammar);
                     Console.WriteLine("Test " + test + " failed: " + e.Message);
                     Console.WriteLine();
                 }
@@ -108,7 +113,7 @@ namespace ClemToken
                 test++;
                 var (line, tree) = GetPair(ref text);
                 Console.Out.Flush();
-                // Console.SetOut(TextWriter.Null); // turn console off
+                Console.SetOut(TextWriter.Null); // turn console off
                 var start = DateTime.Now;
                 var generatedTree = Generator.Generate(line)[0];
                 try

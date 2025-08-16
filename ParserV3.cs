@@ -255,6 +255,15 @@ class ParserV3
                         }
                         Console.WriteLine($"Expand limit reached: {expandLimit}");
                         return true;
+                    case "digit":
+                        if (char.IsDigit(code[cursor]))
+                        {
+                            newCursor = cursor + 1;
+                            ruleTree = new Tree(new Token("digit", code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
+                            return true;
+                        }
+                        ruleTree = null;
+                        return false;
                     default:
                         throw new NotSupportedException($"Reserved rule '{reserved.Name}' is not supported.");
                 }
@@ -425,7 +434,7 @@ class ParserV3
                     targetCursor++;
                     continue;
                 }
-                else if (i != 0 && char.IsWhiteSpace(code[targetCursor]))
+                else if (i != 0 && targetCursor < code.Length && char.IsWhiteSpace(code[targetCursor]))
                 {
                     Console.WriteLine($"Null expansion type 3");
                     i--;

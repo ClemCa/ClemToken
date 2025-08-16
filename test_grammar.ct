@@ -2,7 +2,7 @@
 @statement: [@import | @declaration | @call] ;
 
 ## STATEMENTS
-@import: @identifier (. @identifier)* from @identifier
+@import: import @identifier (. @identifier)* from @identifier
 @declaration: [var | @type] @identifier = @expression
 
 ## SUB
@@ -20,7 +20,7 @@
 
 ### NUMBERS
 @number: [@integer | @float]
-@integer: _($[digit])+
+@integer: ($[digit]):+
 @float: @integer . @integer
 
 

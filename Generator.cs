@@ -52,7 +52,7 @@ namespace ClemToken
         }
     }
 
-    struct Reference: Rule
+    struct Reference : Rule
     {
         public (int, int) Repeat { get; set; }
         public string Name { get; set; }
@@ -71,7 +71,8 @@ namespace ClemToken
             IsReserved = false;
         }
     }
-    struct Anchor: Rule {
+    struct Anchor : Rule
+    {
         public (int, int) Repeat { get; set; }
         public string Name { get; set; }
         public string? Value { get; set; }
@@ -278,7 +279,7 @@ namespace ClemToken
         private string[] reserved = ["name"];
         public static Rule[] Generate(string grammar)
         {
-            string[] parts = [..Split(grammar).Select((p) => p.Trim()).Where((p) => p != "")];
+            string[] parts = [.. Split(grammar).Select((p) => p.Trim()).Where((p) => p != "")];
             List<Rule> rules = new List<Rule>();
             foreach (var part in parts)
             {
@@ -299,24 +300,38 @@ namespace ClemToken
             }
             Rule? root = null;
             string anchor = "";
-            if(line.StartsWith("@")) {
-                for(int i = 0; i < line.Length; i++) {
-                    if(char.IsWhiteSpace(line[i])) {
+            if (line.StartsWith("@"))
+            {
+                for (int i = 0; i < line.Length; i++)
+                {
+                    if (char.IsWhiteSpace(line[i]))
+                    {
                         break;
                     }
-                    if(line[i] == ':') {
-                        anchor = line[..(i+1)];
+                    if (line[i] == ':')
+                    {
+                        anchor = line[..(i + 1)];
                         break;
                     }
                 }
             }
-            if(anchor != "") {
-                if(inAnchor) {
+            if (anchor != "")
+            {
+                if (inAnchor)
+                {
                     throw new Exception("Rule cannot have more than one anchor: " + anchor);
                 }
                 Console.WriteLine("Found anchor: " + anchor);
                 root = new Anchor(anchor);
-                root.Children = [ParseLine(line[(anchor.Length + 1)..], true)];
+                var result = ParseLine(line[(anchor.Length + 1)..], true);
+                if (result is Anchor tmp)
+                {
+                    root.Children = tmp.Children;
+                }
+                else
+                {
+                    root.Children = [result];
+                }
                 return root;
             }
             for (int i = 0; i < line.Length; i++)
@@ -351,17 +366,37 @@ namespace ClemToken
                     {
                         throw new Exception("Anchors are not authorized in the middle of a rule: " + acc);
                     }
+                    else if (tk is Optional)
+                    {
+                        int closingBracket = line[i..].IndexOf(']');
+                        if (closingBracket == -1)
+                        {
+                            throw new Exception("Unmatched opening bracket in optional: " + line[i..Math.Min(i + 10, line.Length)]);
+                        }
+                        tk = ExploreOptional(line[(i - acc.Length + 1)..(i+closingBracket)]);
+                        tk.Value = line[(i - acc.Length)..(i+closingBracket + 1)];
+                        i = i + closingBracket + 1;
+                        Console.WriteLine("Found optional: " + tk.Value);
+                    }
                     else
                     {
                         Console.WriteLine("Found token: " + acc);
                     }
                     if (root == null)
                     {
-                        root = tk;
+                        if (inAnchor)
+                        {
+                            root = new Anchor // intermediary to be extracted above
+                            {
+                                Children = [tk]
+                            };
+                        }
+                        else
+                            root = tk;
                     }
                     else
                     {
-                        root.Children = [..root.Children ?? [], tk];
+                        root.Children = [.. root.Children ?? [], tk];
                     }
                     continue;
                 }
@@ -402,7 +437,7 @@ namespace ClemToken
             }
             if (root == null)
             {
-                throw new Exception("No tokens found in line (length "+line.Length+"): " + line);
+                throw new Exception("No tokens found in line (length " + line.Length + "): " + line);
             }
             return root;
         }
@@ -461,6 +496,10 @@ namespace ClemToken
                             tk = ExploreOptional(text[(i + 1)..closingBracket]);
                             tk.Value = text[i..(closingBracket + 1)];
                         }
+                        if (tk is Anchor)
+                        {
+                            throw new Exception("Anchors are not authorized in subgroups: " + text[i..]);
+                        }
                         Console.WriteLine("Found token: " + tk.Name);
                         i += tk.Value?.Length ?? tk.Name.Length;
                         rules.Add(tk);
@@ -487,7 +526,7 @@ namespace ClemToken
                 }
                 options.Add(ch[0]);
             }
-            optional.Children = [..options];
+            optional.Children = [.. options];
             return optional;
         }
         private static (bool, Rule) GroupToToken(string value, string prefix, string suffix)
@@ -502,7 +541,7 @@ namespace ClemToken
             {
                 isGroup = false; // the sole exception
             }
-            else if (token.StartsWith("@") && token.EndsWith(":"))
+            else if (token.StartsWith('@') && token.EndsWith(':'))
             {
                 return (false, new Anchor(token));
             }
@@ -532,7 +571,7 @@ namespace ClemToken
                     return (subgroup, group);
                 }
             }
-            if(token.StartsWith("@") && token.Length > 1)
+            if (token.StartsWith("@") && token.Length > 1)
             {
                 return (false, new Reference(token));
             }

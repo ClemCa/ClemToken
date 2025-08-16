@@ -1,0 +1,929 @@
+ClemToken
+(
+  name: Root
+  value:
+  (
+    name: statement
+    value: import test from testy;
+    (
+      name: import
+      value: import test from testy
+      (
+        name: import
+        value: import
+      )
+      (
+        name: identifier
+        value: test
+        (
+          name: name
+          value: test
+        )
+      )
+      (
+        name: from
+        value: from
+      )
+      (
+        name: identifier
+        value: testy
+        (
+          name: name
+          value: testy
+        )
+      )
+    )
+    (
+      name: ;
+      value: ;
+    )
+  )
+  (
+    name: statement
+    value: import test.a.b from testy;
+    (
+      name: import
+      value: import test.a.b from testy
+      (
+        name: import
+        value: import
+      )
+      (
+        name: identifier
+        value: test
+        (
+          name: name
+          value: test
+        )
+      )
+      (
+        name: Anonymous*
+        value: .a.b
+        (
+          name: Anonymous
+          value: .a
+          (
+            name: .
+            value: .
+          )
+          (
+            name: identifier
+            value: a
+            (
+              name: name
+              value: a
+            )
+          )
+        )
+        (
+          name: Anonymous
+          value: .b
+          (
+            name: .
+            value: .
+          )
+          (
+            name: identifier
+            value: b
+            (
+              name: name
+              value: b
+            )
+          )
+        )
+      )
+      (
+        name: from
+        value: from
+      )
+      (
+        name: identifier
+        value: testy
+        (
+          name: name
+          value: testy
+        )
+      )
+    )
+    (
+      name: ;
+      value: ;
+    )
+  )
+  (
+    name: statement
+    value: import test .b from testy ;
+    (
+      name: import
+      value: import test .b from testy
+      (
+        name: import
+        value: import
+      )
+      (
+        name: identifier
+        value: test
+        (
+          name: name
+          value: test
+        )
+      )
+      (
+        name: Anonymous
+        value: .b
+        (
+          name: .
+          value: .
+        )
+        (
+          name: identifier
+          value: b
+          (
+            name: name
+            value: b
+          )
+        )
+      )
+      (
+        name: from
+        value: from
+      )
+      (
+        name: identifier
+        value: testy
+        (
+          name: name
+          value: testy
+        )
+      )
+    )
+    (
+      name: ;
+      value: ;
+    )
+  )
+  (
+    name: statement
+    value: import test . b from testy ;
+    (
+      name: import
+      value: import test . b from testy
+      (
+        name: import
+        value: import
+      )
+      (
+        name: identifier
+        value: test
+        (
+          name: name
+          value: test
+        )
+      )
+      (
+        name: Anonymous
+        value: . b
+        (
+          name: .
+          value: .
+        )
+        (
+          name: identifier
+          value: b
+          (
+            name: name
+            value: b
+          )
+        )
+      )
+      (
+        name: from
+        value: from
+      )
+      (
+        name: identifier
+        value: testy
+        (
+          name: name
+          value: testy
+        )
+      )
+    )
+    (
+      name: ;
+      value: ;
+    )
+  )
+  (
+    name: statement
+    value: importtest.bfromtesty;
+    (
+      name: import
+      value: importtest.bfromtesty
+      (
+        name: import
+        value: import
+      )
+      (
+        name: identifier
+        value: test
+        (
+          name: name
+          value: test
+        )
+      )
+      (
+        name: Anonymous
+        value: .b
+        (
+          name: .
+          value: .
+        )
+        (
+          name: identifier
+          value: b
+          (
+            name: name
+            value: b
+          )
+        )
+      )
+      (
+        name: from
+        value: from
+      )
+      (
+        name: identifier
+        value: testy
+        (
+          name: name
+          value: testy
+        )
+      )
+    )
+    (
+      name: ;
+      value: ;
+    )
+  )
+  (
+    name: declaration
+    value: var code = "
+    (
+      name: var
+      value: var
+    )
+    (
+      name: identifier
+      value: code
+      (
+        name: name
+        value: code
+      )
+    )
+    (
+      name: =
+      value: =
+    )
+    (
+      name: expression
+      value:  "
+      (
+        name: identifier
+        value: "
+        (
+          name: name
+          value: "
+        )
+      )
+    )
+  )
+  (
+    name: expression
+    value: h
+    (
+      name: identifier
+      value: h
+      (
+        name: name
+        value: h
+      )
+    )
+  )
+  (
+    name: expression
+    value: e
+    (
+      name: identifier
+      value: e
+      (
+        name: name
+        value: e
+      )
+    )
+  )
+  (
+    name: expression
+    value: l
+    (
+      name: identifier
+      value: l
+      (
+        name: name
+        value: l
+      )
+    )
+  )
+  (
+    name: expression
+    value: l
+    (
+      name: identifier
+      value: l
+      (
+        name: name
+        value: l
+      )
+    )
+  )
+  (
+    name: expression
+    value: o
+    (
+      name: identifier
+      value: o
+      (
+        name: name
+        value: o
+      )
+    )
+  )
+  (
+    name: expression
+    value: w
+    (
+      name: identifier
+      value: w
+      (
+        name: name
+        value: w
+      )
+    )
+  )
+  (
+    name: expression
+    value: o
+    (
+      name: identifier
+      value: o
+      (
+        name: name
+        value: o
+      )
+    )
+  )
+  (
+    name: expression
+    value: r
+    (
+      name: identifier
+      value: r
+      (
+        name: name
+        value: r
+      )
+    )
+  )
+  (
+    name: expression
+    value: l
+    (
+      name: identifier
+      value: l
+      (
+        name: name
+        value: l
+      )
+    )
+  )
+  (
+    name: expression
+    value: d
+    (
+      name: identifier
+      value: d
+      (
+        name: name
+        value: d
+      )
+    )
+  )
+  (
+    name: expression
+    value: "
+    (
+      name: identifier
+      value: "
+      (
+        name: name
+        value: "
+      )
+    )
+  )
+  (
+    name: expression
+    value: ;
+    (
+      name: identifier
+      value: ;
+      (
+        name: name
+        value: ;
+      )
+    )
+  )
+  (
+    name: statement
+    value: Log(code);
+    (
+      name: call
+      value: Log(code)
+      (
+        name: identifier
+        value: Log
+        (
+          name: name
+          value: Log
+        )
+      )
+      (
+        name: (
+        value: (
+      )
+      (
+        name: arguments
+        value: code
+        (
+          name: expression
+          value: code
+          (
+            name: identifier
+            value: code
+            (
+              name: name
+              value: code
+            )
+          )
+        )
+      )
+      (
+        name: )
+        value: )
+      )
+    )
+    (
+      name: ;
+      value: ;
+    )
+  )
+  (
+    name: declaration
+    value: var example = (
+    (
+      name: var
+      value: var
+    )
+    (
+      name: identifier
+      value: example
+      (
+        name: name
+        value: example
+      )
+    )
+    (
+      name: =
+      value: =
+    )
+    (
+      name: expression
+      value:  (
+      (
+        name: identifier
+        value: (
+        (
+          name: name
+          value: (
+        )
+      )
+    )
+  )
+  (
+    name: expression
+    value: )
+    (
+      name: identifier
+      value: )
+      (
+        name: name
+        value: )
+      )
+    )
+  )
+  (
+    name: expression
+    value: =
+    (
+      name: identifier
+      value: =
+      (
+        name: name
+        value: =
+      )
+    )
+  )
+  (
+    name: expression
+    value: >
+    (
+      name: identifier
+      value: >
+      (
+        name: name
+        value: >
+      )
+    )
+  )
+  (
+    name: expression
+    value: {
+    (
+      name: identifier
+      value: {
+      (
+        name: name
+        value: {
+      )
+    )
+  )
+  (
+    name: expression
+    value: L
+    (
+      name: identifier
+      value: L
+      (
+        name: name
+        value: L
+      )
+    )
+  )
+  (
+    name: expression
+    value: o
+    (
+      name: identifier
+      value: o
+      (
+        name: name
+        value: o
+      )
+    )
+  )
+  (
+    name: expression
+    value: g
+    (
+      name: identifier
+      value: g
+      (
+        name: name
+        value: g
+      )
+    )
+  )
+  (
+    name: expression
+    value: (
+    (
+      name: identifier
+      value: (
+      (
+        name: name
+        value: (
+      )
+    )
+  )
+  (
+    name: expression
+    value: "
+    (
+      name: identifier
+      value: "
+      (
+        name: name
+        value: "
+      )
+    )
+  )
+  (
+    name: expression
+    value: h
+    (
+      name: identifier
+      value: h
+      (
+        name: name
+        value: h
+      )
+    )
+  )
+  (
+    name: expression
+    value: e
+    (
+      name: identifier
+      value: e
+      (
+        name: name
+        value: e
+      )
+    )
+  )
+  (
+    name: expression
+    value: l
+    (
+      name: identifier
+      value: l
+      (
+        name: name
+        value: l
+      )
+    )
+  )
+  (
+    name: expression
+    value: l
+    (
+      name: identifier
+      value: l
+      (
+        name: name
+        value: l
+      )
+    )
+  )
+  (
+    name: expression
+    value: o
+    (
+      name: identifier
+      value: o
+      (
+        name: name
+        value: o
+      )
+    )
+  )
+  (
+    name: expression
+    value: w
+    (
+      name: identifier
+      value: w
+      (
+        name: name
+        value: w
+      )
+    )
+  )
+  (
+    name: expression
+    value: o
+    (
+      name: identifier
+      value: o
+      (
+        name: name
+        value: o
+      )
+    )
+  )
+  (
+    name: expression
+    value: r
+    (
+      name: identifier
+      value: r
+      (
+        name: name
+        value: r
+      )
+    )
+  )
+  (
+    name: expression
+    value: l
+    (
+      name: identifier
+      value: l
+      (
+        name: name
+        value: l
+      )
+    )
+  )
+  (
+    name: expression
+    value: d
+    (
+      name: identifier
+      value: d
+      (
+        name: name
+        value: d
+      )
+    )
+  )
+  (
+    name: expression
+    value: "
+    (
+      name: identifier
+      value: "
+      (
+        name: name
+        value: "
+      )
+    )
+  )
+  (
+    name: expression
+    value: )
+    (
+      name: identifier
+      value: )
+      (
+        name: name
+        value: )
+      )
+    )
+  )
+  (
+    name: expression
+    value: ;
+    (
+      name: identifier
+      value: ;
+      (
+        name: name
+        value: ;
+      )
+    )
+  )
+  (
+    name: expression
+    value: }
+    (
+      name: identifier
+      value: }
+      (
+        name: name
+        value: }
+      )
+    )
+  )
+  (
+    name: expression
+    value: ;
+    (
+      name: identifier
+      value: ;
+      (
+        name: name
+        value: ;
+      )
+    )
+  )
+  (
+    name: expression
+    value: e
+    (
+      name: identifier
+      value: e
+      (
+        name: name
+        value: e
+      )
+    )
+  )
+  (
+    name: expression
+    value: x
+    (
+      name: identifier
+      value: x
+      (
+        name: name
+        value: x
+      )
+    )
+  )
+  (
+    name: expression
+    value: a
+    (
+      name: identifier
+      value: a
+      (
+        name: name
+        value: a
+      )
+    )
+  )
+  (
+    name: expression
+    value: m
+    (
+      name: identifier
+      value: m
+      (
+        name: name
+        value: m
+      )
+    )
+  )
+  (
+    name: expression
+    value: p
+    (
+      name: identifier
+      value: p
+      (
+        name: name
+        value: p
+      )
+    )
+  )
+  (
+    name: expression
+    value: l
+    (
+      name: identifier
+      value: l
+      (
+        name: name
+        value: l
+      )
+    )
+  )
+  (
+    name: expression
+    value: e
+    (
+      name: identifier
+      value: e
+      (
+        name: name
+        value: e
+      )
+    )
+  )
+  (
+    name: expression
+    value: (
+    (
+      name: identifier
+      value: (
+      (
+        name: name
+        value: (
+      )
+    )
+  )
+  (
+    name: expression
+    value: )
+    (
+      name: identifier
+      value: )
+      (
+        name: name
+        value: )
+      )
+    )
+  )
+  (
+    name: expression
+    value: ;
+    (
+      name: identifier
+      value: ;
+      (
+        name: name
+        value: ;
+      )
+    )
+  )
+)
