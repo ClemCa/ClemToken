@@ -91,6 +91,12 @@ class ParserV3
         int expandLimit = 0;
         while (cursor < code.Length)
         {
+            if(char.IsWhiteSpace(code[cursor]))
+            {
+                // Skip whitespace in-between rules
+                cursor++;
+                continue;
+            }
             if (Match(code, cursor, rules, referenceStore, out Tree? foundTree, out int newCursor, out int matchExpandLimit))
             {
                 cursor = newCursor;
@@ -161,6 +167,7 @@ class ParserV3
         {
             if (SingleGroupCheck(code, startCursor, expandAllowed, new Group((1, 1), target.Name, false, target.Children), referenceStore, out newCursor, out ruleTree, out expandLimit))
             {
+                Console.WriteLine($"--------- single group check passed");
                 if (ruleTree == null)
                 {
                     return true; // Anchor matched but no tree created
@@ -170,6 +177,7 @@ class ParserV3
                 ruleTree = rt;
                 return true; // Anchor matched
             }
+            Console.WriteLine($"--------- single group check failed");
             return false;
         }
         switch (rule)
@@ -181,6 +189,7 @@ class ParserV3
                     ruleTree = null;
                     return true;
                 }
+                Console.WriteLine($"Checking anchor: {anchor.Name} at cursor: {cursor}, expand: {expandAllowed}");
                 return NonGroupChildrenCheck(anchor, cursor, expandAllowed, out newCursor, out ruleTree, out expandLimit);
             case Simple simple:
                 if (simple.Value == null)
@@ -318,7 +327,7 @@ class ParserV3
         for (int i = 0; i < group.Children.Length; i++)
         {
             var child = group.Children[i];
-            Console.WriteLine($"Checking group child {i} ({child} {child.Name})");
+            Console.WriteLine($"Checking group child {i} ({child} {child.Name}), expand: {expandAllowed}, prev: {previousWasExpandable}");
             if (!Check(code, targetCursor, 0, child, referenceStore, out int childCursor, out Tree? childTree, out int childExpandLimit))
             {
                 if (targetCursor >= code.Length)
@@ -328,6 +337,7 @@ class ParserV3
                 }
                 if (char.IsWhiteSpace(code[targetCursor]))
                 {
+                    Console.WriteLine($"Match not found, but whitespace found, trying to expand ({code[(targetCursor + 1)..Math.Min(targetCursor + 10, code.Length)]})");
                     previousWasExpandable = false;
                     i--;
                     targetCursor++;
@@ -339,6 +349,7 @@ class ParserV3
                 }
                 else if (expandAllowed > 0)
                 {
+                    Console.WriteLine($"Match not found, but expand allowed, trying to expand ({code[(targetCursor + 1)..Math.Min(targetCursor + 10, code.Length)]})");
                     expandAllowed--;
                     i--;
                     targetCursor++;
@@ -351,13 +362,6 @@ class ParserV3
                     i--;
                     targetCursor++;
                     continue; // If the previous child was expandable, try expanding and checking the same child again
-                }
-                else if (char.IsWhiteSpace(code[targetCursor]))
-                {
-                    Console.WriteLine($"Match not found, but whitespace found, trying to expand ({code[(targetCursor + 1)..Math.Min(targetCursor + 10, code.Length)]})");
-                    i--;
-                    targetCursor++;
-                    continue; // If the current character is whitespace, skip it and try the same child again, would be one last time if the previous was expandable
                 }
                 targetCursor = newCursor; // reset so the next child is checked against the original cursor if optional
                 if (child is Group childGroup && childGroup.Repeat.Item1 == 0) // optional children can be skipped
@@ -385,7 +389,7 @@ class ParserV3
                     previousExpandLimit = childExpandLimit;
                 }
                 children.Add(childTree.Value);
-                Console.WriteLine($"Child found: {childTree.Value}, expandable: {previousWasExpandable}, expand limit: {childExpandLimit}");
+                Console.WriteLine($"Child found: {childTree.Value}, expandable: {previousWasExpandable}, expand limit: {childExpandLimit}, null expansion: {nullExpansionT1+nullExpansionT2+nullExpansionT3}");
             }
             else if (childExpandLimit > 0)
             {
@@ -395,6 +399,7 @@ class ParserV3
             {
                 if (expandAllowed > 0)
                 {
+                    Console.WriteLine($"Null expansion type 1");
                     expandAllowed--;
                     i--;
                     targetCursor++;
@@ -403,14 +408,16 @@ class ParserV3
                 }
                 else if (previousWasExpandable && expanded < previousExpandLimit)
                 {
+                    Console.WriteLine($"Null expansion type 2");
                     expanded++;
                     nullExpansionT2++;
                     i--;
                     targetCursor++;
                     continue;
                 }
-                else if (char.IsWhiteSpace(code[targetCursor]))
+                else if (i != 0 && char.IsWhiteSpace(code[targetCursor]))
                 {
+                    Console.WriteLine($"Null expansion type 3");
                     i--;
                     targetCursor++;
                     nullExpansionT3++;

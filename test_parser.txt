@@ -96,3 +96,81 @@ import test.a.b from testy;
         )
     )
 )
+```
+import test from testy;
+importtest.bfromtesty;
+```
+(
+    Name: Root
+    (
+        Name: import
+        Value: import test from testy;
+        (
+            Name: identifier
+            Value: test
+            (
+                Name: name
+                Value: test
+            )
+        )
+        (
+            Name: from
+            Value: from
+        )
+        (
+            Name: identifier
+            Value: testy
+            (
+                Name: name
+                Value: testy
+            )
+        )
+        (
+            Name: ;
+            Value: ;
+        )
+    )
+    (
+        Name: import
+        Value: importtest.bfromtesty;
+        (
+            Name: identifier
+            Value: test
+            (
+                Name: name
+                Value: test
+            )
+        )
+        (
+            Name: Anonymous
+            Value: .b
+            (
+                Value: .
+            )
+            (
+                Name: identifier
+                Value: b
+                (
+                    Name: name
+                    Value: b
+                )
+            )
+        )
+        (
+            Name: from
+            Value: from
+        )
+        (
+            Name: identifier
+            Value: testy
+            (
+                Name: name
+                Value: testy
+            )
+        )
+        (
+            Name: ;
+            Value: ;
+        )
+    )
+)

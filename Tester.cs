@@ -235,7 +235,8 @@ namespace ClemToken
             }
             else
             {
-                do {
+                do
+                {
                     var nextLine = text.IndexOf('\n');
                     line = text.Substring(0, nextLine);
                     text = text.Substring(nextLine + 1);
