@@ -7,3 +7,9 @@ importtest.bfromtesty;
 var code = "hello world";
 
 Log(code);
+
+var example = () => {
+  Log("hello world");
+};
+
+example();

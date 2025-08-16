@@ -1,0 +1,29 @@
+# MAIN
+@statement: [@import | @declaration | @call] ;
+
+## STATEMENTS
+@import: @identifier (. @identifier)* from @identifier
+@declaration: [var | @type] @identifier = @expression
+
+## SUB
+@expression: [@literal | @identifier | @call | @lambda]
+@arguments: @expression (, @expression)*
+
+## FUNCS
+@call: @identifier ( (@arguments):? )
+@lambda: [inline:(( (@arguments):? ) => @expression) | long:(( (@arguments):? ) => { body:(@statement)* })]
+
+## VALUES
+@literal: [@string | @number | @boolean]
+@string: " content:(($[name]):*) "
+@boolean: [true | false]
+
+### NUMBERS
+@number: [@integer | @float]
+@integer: _($[digit])+
+@float: @integer . @integer
+
+
+# BASIC
+@identifier: $[name]
+@type: $[name]

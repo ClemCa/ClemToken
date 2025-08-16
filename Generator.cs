@@ -361,7 +361,7 @@ namespace ClemToken
                     }
                     else
                     {
-                        root.Children = [.. root.Children, tk];
+                        root.Children = [..root.Children ?? [], tk];
                     }
                     continue;
                 }
@@ -506,7 +506,7 @@ namespace ClemToken
             {
                 return (false, new Anchor(token));
             }
-            else if (token.StartsWith("[") && !char.IsWhiteSpace(token[1]) && !token.Contains('|') || !token.Contains(']'))
+            else if (token.StartsWith('[') && !char.IsWhiteSpace(token[1]) && !token.Contains('|') && !token.Contains(']'))
             {
                 return (false, new Optional());
             }
@@ -585,7 +585,7 @@ namespace ClemToken
             var postfix = end + 1;
             for (; postfix < text.Length; postfix++)
             {
-                if (text[postfix] == ')' || text[postfix] == ' ')
+                if (text[postfix] == ')' || text[postfix] == ' ' || text[postfix] == ']')
                 {
                     break;
                 }

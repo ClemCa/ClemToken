@@ -108,7 +108,7 @@ namespace ClemToken
                 test++;
                 var (line, tree) = GetPair(ref text);
                 Console.Out.Flush();
-                Console.SetOut(TextWriter.Null); // turn console off
+                // Console.SetOut(TextWriter.Null); // turn console off
                 var start = DateTime.Now;
                 var generatedTree = Generator.Generate(line)[0];
                 try
