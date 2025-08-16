@@ -136,11 +136,16 @@ class ParserV3
         newCursor = cursor; // No match found, return the original cursor
         foreach (var rule in rules)
         {
-            if (Check(code, cursor, rule, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit))
+            if (Check(code, cursor, 0, rule, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit))
             {
+                Console.WriteLine($"Matched rule {rule} {rule.Name} at cursor: {cursor} size: {cursor - ruleCursor}");
                 newCursor = ruleCursor;
                 foundTree = ruleTree;
                 return true;
+            }
+            else
+            {
+                Console.WriteLine($"Failed to match rule {rule} {rule.Name} at cursor: {cursor}");
             }
         }
         expandLimit = 0;
@@ -148,13 +153,13 @@ class ParserV3
         return false; // No match found
     }
 
-    static bool Check(string code, int cursor, Rule rule, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit)
+    static bool Check(string code, int cursor, int expandAllowed, Rule rule, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit)
     {
         newCursor = cursor;
         expandLimit = 0;
-        bool NonGroupChildrenCheck(Rule target, int startCursor, out int newCursor, out Tree? ruleTree, out int expandLimit)
+        bool NonGroupChildrenCheck(Rule target, int startCursor, int expandAllowed, out int newCursor, out Tree? ruleTree, out int expandLimit)
         {
-            if (SingleGroupCheck(code, startCursor, new Group((1, 1), target.Name, false, target.Children), referenceStore, out newCursor, out ruleTree, out expandLimit))
+            if (SingleGroupCheck(code, startCursor, expandAllowed, new Group((1, 1), target.Name, false, target.Children), referenceStore, out newCursor, out ruleTree, out expandLimit))
             {
                 if (ruleTree == null)
                 {
@@ -176,21 +181,26 @@ class ParserV3
                     ruleTree = null;
                     return true;
                 }
-                return NonGroupChildrenCheck(anchor, cursor, out newCursor, out ruleTree, out expandLimit);
+                return NonGroupChildrenCheck(anchor, cursor, expandAllowed, out newCursor, out ruleTree, out expandLimit);
             case Simple simple:
                 if (simple.Value == null)
                 {
                     throw new Exception("Empty simple rule");
                 }
+                Console.WriteLine($"Looking for simple rule: {simple.Value} at cursor: {cursor}, expand: {expandAllowed} ({code[cursor..Math.Min(cursor + simple.Value.Length, code.Length)]})");
                 for (int i = 0; i < simple.Value.Length; i++)
                 {
                     if (cursor + i >= code.Length || code[cursor + i] != simple.Value[i])
                     {
+                        if (expandAllowed > 0)
+                        {
+                            return Check(code, cursor + 1, expandAllowed - 1, simple, referenceStore, out newCursor, out ruleTree, out expandLimit);
+                        }
                         ruleTree = null; // No match for simple rule
                         return false;
                     }
                 }
-                bool ngSuccess = NonGroupChildrenCheck(simple, cursor + simple.Value.Length, out newCursor, out ruleTree, out expandLimit);
+                bool ngSuccess = NonGroupChildrenCheck(simple, cursor + simple.Value.Length, 0, out newCursor, out ruleTree, out expandLimit);
                 if (ngSuccess && ruleTree.HasValue)
                 {
                     var rt = ruleTree.Value;
@@ -212,6 +222,7 @@ class ParserV3
                 switch (reserved.Name)
                 {
                     case "name":
+                        Console.WriteLine($"Looking for name rule at cursor: {cursor}, expand: {expandAllowed} ({code[cursor..Math.Min(cursor + 10, code.Length)]})");
                         if (char.IsWhiteSpace(code[cursor]))
                         {
                             ruleTree = null;
@@ -223,37 +234,40 @@ class ParserV3
                         {
                             expandLimit++;
                         }
+                        Console.WriteLine($"Expand limit reached: {expandLimit}");
                         return true;
                     default:
                         throw new NotSupportedException($"Reserved rule '{reserved.Name}' is not supported.");
                 }
             case Group group:
-                return CheckGroup(code, cursor, group, referenceStore, out newCursor, out ruleTree, out expandLimit);
+                return CheckGroup(code, cursor, expandAllowed, group, referenceStore, out newCursor, out ruleTree, out expandLimit);
             case Reference reference:
                 if(reference.Children.Length > 0)
                 {
                     throw new Exception("References with children are not supported in this version of the parser.");
                 }
                 var referenceRule = referenceStore.GetReference(reference.Name);
-                bool success = Check(code, cursor, referenceRule, referenceStore, out newCursor, out ruleTree, out expandLimit);
+                bool success = Check(code, cursor, expandAllowed, referenceRule, referenceStore, out newCursor, out ruleTree, out expandLimit);
+                Console.WriteLine($"Reference success {success} with expand limit {expandLimit}");
                 return success;
             default:
                 throw new NotSupportedException($"Rule type {rule.GetType().Name} is not supported.");
         }
     }
-    static bool CheckGroup(string code, int cursor, Group group, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit)
+    static bool CheckGroup(string code, int cursor, int expandAllowed, Group group, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit)
     {
         newCursor = cursor;
         expandLimit = 0;
         if (group.Repeat.Item1 == 0 && group.Repeat.Item2 == 0)
         {
-            ruleTree = new Tree(new Token(group.Name, "", cursor, 0, group.Ignored), []);
+            ruleTree = null;
+            expandLimit = expandAllowed;
             return true;
         }
         List<Tree> children = [];
         for (int i = 0; newCursor < code.Length && (i < group.Repeat.Item2 || group.Repeat.Item2 == -1); i++)
         {
-            if (!SingleGroupCheck(code, newCursor, group, referenceStore, out int iterationCursor, out Tree? groupTree, out int groupExpandLimit))
+            if (!SingleGroupCheck(code, newCursor, i == 0 ? expandAllowed : 0, group, referenceStore, out int iterationCursor, out Tree? groupTree, out int groupExpandLimit))
             {
                 expandLimit = 0;
                 if (i < group.Repeat.Item1) // If we haven't matched the minimum required repetitions
@@ -271,7 +285,12 @@ class ParserV3
             newCursor = iterationCursor;
             expandLimit = groupExpandLimit;
         }
-        if (children.Count == 1)
+        if (children.Count == 0)
+        {
+            expandLimit = expandAllowed;
+            ruleTree = null;
+        }
+        else if (children.Count == 1)
         {
             ruleTree = children[0];
         }
@@ -282,7 +301,7 @@ class ParserV3
         return true;
     }
 
-    static bool SingleGroupCheck(string code, int cursor, Group group, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit) // no repetition, just the children
+    static bool SingleGroupCheck(string code, int cursor, int expandAllowed, Group group, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit) // no repetition, just the children
     {
         newCursor = cursor; // always at the latest validated place
         int targetCursor = newCursor; // can creep forward to check against whitespace
@@ -293,10 +312,14 @@ class ParserV3
         List<Tree> children = [];
         expandLimit = 0;
         int previousExpandLimit = 0;
+        int nullExpansionT1 = 0;
+        int nullExpansionT2 = 0;
+        int nullExpansionT3 = 0;
         for (int i = 0; i < group.Children.Length; i++)
         {
             var child = group.Children[i];
-            if (!Check(code, targetCursor, child, referenceStore, out int childCursor, out Tree? childTree, out int childExpandLimit))
+            Console.WriteLine($"Checking group child {i} ({child} {child.Name})");
+            if (!Check(code, targetCursor, 0, child, referenceStore, out int childCursor, out Tree? childTree, out int childExpandLimit))
             {
                 if (targetCursor >= code.Length)
                 {
@@ -314,12 +337,27 @@ class ParserV3
                     }
                     continue; // Skip whitespace and try the same child again
                 }
-                else if (previousWasExpandable)
+                else if (expandAllowed > 0)
                 {
+                    expandAllowed--;
+                    i--;
+                    targetCursor++;
+                    continue;
+                }
+                else if (previousWasExpandable && expanded < previousExpandLimit)
+                {
+                    Console.WriteLine($"Match not found, but previous child was expandable, trying to expand ({code[(targetCursor + 1)..Math.Min(targetCursor + 10, code.Length)]})");
                     expanded++;
                     i--;
                     targetCursor++;
                     continue; // If the previous child was expandable, try expanding and checking the same child again
+                }
+                else if (char.IsWhiteSpace(code[targetCursor]))
+                {
+                    Console.WriteLine($"Match not found, but whitespace found, trying to expand ({code[(targetCursor + 1)..Math.Min(targetCursor + 10, code.Length)]})");
+                    i--;
+                    targetCursor++;
+                    continue; // If the current character is whitespace, skip it and try the same child again, would be one last time if the previous was expandable
                 }
                 targetCursor = newCursor; // reset so the next child is checked against the original cursor if optional
                 if (child is Group childGroup && childGroup.Repeat.Item1 == 0) // optional children can be skipped
@@ -329,24 +367,65 @@ class ParserV3
                 }
                 return false; // Child rule did not match
             }
-            if (expanded > 0)
-            {
-                children[expandIndex] = ExpandLastNode(children[expandIndex], code, expanded);
-            }
-            expanded = 0;
-            previousWasExpandable = childExpandLimit > 0;
             if (childTree != null)
             {
+                if (expandAllowed > 0)
+                {
+                    expandAllowed = 0;
+                }
+                if (expanded > 0)
+                {
+                    children[expandIndex] = ExpandLastNode(children[expandIndex], code, expanded);
+                }
+                expanded = 0;
+                previousWasExpandable = childExpandLimit > 0;
                 if (previousWasExpandable)
                 {
                     expandIndex = children.Count;
                     previousExpandLimit = childExpandLimit;
                 }
                 children.Add(childTree.Value);
+                Console.WriteLine($"Child found: {childTree.Value}, expandable: {previousWasExpandable}, expand limit: {childExpandLimit}");
             }
-            else if (previousWasExpandable)
+            else if (childExpandLimit > 0)
             {
                 throw new InvalidOperationException("Returned child tree should not be null for expandable rules.");
+            }
+            else
+            {
+                if (expandAllowed > 0)
+                {
+                    expandAllowed--;
+                    i--;
+                    targetCursor++;
+                    nullExpansionT1++;
+                    continue;
+                }
+                else if (previousWasExpandable && expanded < previousExpandLimit)
+                {
+                    expanded++;
+                    nullExpansionT2++;
+                    i--;
+                    targetCursor++;
+                    continue;
+                }
+                else if (char.IsWhiteSpace(code[targetCursor]))
+                {
+                    i--;
+                    targetCursor++;
+                    nullExpansionT3++;
+                    continue;
+                }
+                if (nullExpansionT1 > 0 || nullExpansionT2 > 0 || nullExpansionT3 > 0)
+                {
+                    // reset
+                    expandAllowed += nullExpansionT1;
+                    expanded -= nullExpansionT2;
+                    childCursor -= nullExpansionT1 + nullExpansionT2 + nullExpansionT3;
+                    nullExpansionT1 = 0;
+                    nullExpansionT2 = 0;
+                    nullExpansionT3 = 0;
+                }
             }
             newCursor = childCursor;
             targetCursor = childCursor;

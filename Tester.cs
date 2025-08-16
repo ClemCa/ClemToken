@@ -69,7 +69,7 @@ namespace ClemToken
                 var startTime = DateTime.Now;
                 Tree generatedTree;
                 Console.Out.Flush();
-                // Console.SetOut(TextWriter.Null);
+                Console.SetOut(TextWriter.Null);
                 try
                 {
                     generatedTree = ParserV3.Parse(line, rules);

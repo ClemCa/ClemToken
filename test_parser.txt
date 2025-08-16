@@ -38,42 +38,42 @@ import test.a.b from testy;
         Value: import test.a.b from testy;
         (
             Name: identifier
-            Value: test.a.b
+            Value: test
             (
                 Name: name
                 Value: test
             )
+        )
+        (
+            Name: Anonymous*
+            Value: .a.b
             (
-                Name: Anonymous*
-                Value: .a.b
+                Name: Anonymous
+                Value: .a
                 (
-                    Name: Anonymous
-                    Value: .a
-                    (
-                        Value: .
-                    )
-                    (
-                        Name: identifier
-                        Value: a
-                        (
-                            Name: name
-                            Value: a
-                        )
-                    )
+                    Value: .
                 )
                 (
-                    Name: Anonymous
-                    Value: .b
+                    Name: identifier
+                    Value: a
                     (
-                        Value: .
+                        Name: name
+                        Value: a
                     )
+                )
+            )
+            (
+                Name: Anonymous
+                Value: .b
+                (
+                    Value: .
+                )
+                (
+                    Name: identifier
+                    Value: b
                     (
-                        Name: identifier
+                        Name: name
                         Value: b
-                        (
-                            Name: name
-                            Value: b
-                        )
                     )
                 )
             )
