@@ -22,7 +22,7 @@ if %choice%==1 (
     dotnet run -testP test_parser.txt test_grammar.txt -p:StartupObject=ClemToken.Program
 ) else if %choice%==4 (
     echo Running Writing test...
-    dotnet run -p:StartupObject=ClemToken.Program -- -f test_grammar.txt -o test_generated.at 
+    dotnet run -p:StartupObject=ClemToken.Program -- -f test_grammar.txt -o test_generated.at
 ) else if %choice%==5 (
     echo Running Reading test...
     dotnet run -p:StartupObject=ClemToken.Program -- -f test_generated.at -i test_code.txt

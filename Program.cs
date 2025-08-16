@@ -131,6 +131,13 @@
                     var writer = new StringWriter();
                     Tree result;
                     Console.SetOut(writer);
+                    Console.WriteLine("Parsing...");
+                    Console.WriteLine("Rules: " + rules.Length);
+                    Console.WriteLine("Text: " + text);
+                    foreach (var rule in rules)
+                    {
+                        Console.WriteLine($" - {rule.Name}");
+                    }
                     try
                     {
                         result = ParserV3.Parse(text, rules);
@@ -138,6 +145,7 @@
                     catch (Exception e)
                     {
                         Console.WriteLine("Error during parsing: " + e.Message);
+                        Console.WriteLine(e.StackTrace);
                         Console.SetOut(consoleOut);
                         Console.Write("Logs:\n" + writer.ToString());
                         return;
