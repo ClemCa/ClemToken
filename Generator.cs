@@ -282,13 +282,21 @@ namespace ClemToken
             List<Rule> rules = new List<Rule>();
             foreach (var part in parts)
             {
-                rules.Add(ParseLine(part));
+                Rule rule = ParseLine(part);
+                if (rule is not ProcessRule)
+                {
+                    rules.Add(rule);
+                }
             }
             return rules.ToArray();
         }
 
         private static Rule ParseLine(string line, bool inAnchor = false)
         {
+            if (line.StartsWith("#"))
+            {
+                return new ProcessRule(); // comment
+            }
             Rule? root = null;
             string anchor = "";
             if(line.StartsWith("@")) {
