@@ -79,7 +79,7 @@
             if (args[0] == "-f")
             {
                 string file = args[1];
-                if (args[2] == "-o")
+                if (args[2] == "-o" || args[2] == "-O")
                 {
                     if (args.Length != 4)
                     {
@@ -89,8 +89,15 @@
                     string output = args[3];
                     string grammar = File.ReadAllText(file);
                     var consoleOut = Console.Out;
-                    Console.SetOut(TextWriter.Null); // turn console off to avoid cluttering the output
+                    // Console.SetOut(TextWriter.Null); // turn console off to avoid cluttering the output
                     var result = Generator.Generate(grammar);
+                    if (args[2] == "-O")
+                    {
+                        var text = Serializer.DisplayRules(result);
+                        Console.SetOut(consoleOut); // turn console back on
+                        File.WriteAllText(output, text);
+                        return;
+                    }
                     var bytes = Serializer.Serialize(result);
                     Console.SetOut(consoleOut); // turn console back on
                     File.WriteAllBytes(output, bytes);
@@ -145,6 +152,7 @@
                     try
                     {
                         result = ParserV3.Parse(text, rules);
+                        File.WriteAllText("parse_log.txt", writer.ToString());
                     }
                     catch (Exception e)
                     {

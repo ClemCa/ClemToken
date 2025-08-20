@@ -7,12 +7,22 @@
 
 ## SUB
 @expression: [@literal | @call | @lambda | @identifier]
+
 @arguments: @expression (, @expression)*
+
+@implicit_parameters: @implicit_parameter (, @implicit_parameter)*
+@parameters: @parameter (, @parameter)*
+
+@parameter: @type @identifier
+@implicit_parameter: @identifier
 
 ## FUNCS
 @call: @identifier ( (@arguments):? )
-###################TODO################### FIX LAMBDAS, will need generator dumps to know what's wrong
-@lambda: [inline:(( (@arguments):? ) => @expression) | long:(( (@arguments):? ) => { body:(@statement)* })]
+###################TODO################### FIX LAMBDAS, issue with optionals (parameters), instead of assuming there is something and continuing if none,
+########################################## maybe we should assume there's nothing and redo the step if there is, just like expansion works but
+########################################## by instead stepping back, that or treat repeat 0 results for groups more positively? the parser
+########################################## seems to prefer the next option in the optional to an empty group somehow, it could be outdated logic somewhere
+@lambda: [inline:(( (@implicit_parameters):? ) => @expression) | long:(( (@implicit_parameters):? ) => { body:(@statement)* })]
 
 ## VALUES
 @literal: [@string | @number | @boolean]

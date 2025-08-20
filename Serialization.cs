@@ -22,7 +22,7 @@ namespace ClemToken
         {
             stringBuilder.AppendLine(new string(' ', depth * 2) + "(");
             stringBuilder.AppendLine(new string(' ', depth * 2 + 2) + "name: " + tree.Token.Name);
-            stringBuilder.AppendLine(new string(' ', depth * 2 + 2) + "value: " + tree.Token.Value);
+            stringBuilder.AppendLine(new string(' ', depth * 2 + 2) + "value: " + tree.Token.Value.Replace("\r\n", "\\n").Replace("\n", "\\n"));
             foreach (var child in tree.Children)
             {
                 StringSerializeTreeSub(child, stringBuilder, depth + 1);
@@ -40,7 +40,7 @@ namespace ClemToken
         }
         public static void DisplayRule(Rule rule, StringBuilder stringBuilder, int depth = 0)
         {
-            stringBuilder.AppendLine(new string(' ', depth * 2) + rule.Name + " (" + rule.GetType().Name + ";" + rule.Value + ")");
+            stringBuilder.AppendLine(new string(' ', depth * 2) + rule.Name + " (" + rule.GetType().Name + ";" + rule.Value + ";" + rule.Repeat + ")");
             foreach (var child in rule.Children)
             {
                 DisplayRule(child, stringBuilder, depth + 1);
@@ -50,7 +50,7 @@ namespace ClemToken
         {
             private int cursor = initialCursor;
             public bool WriteMode = writeMode;
-            private List<byte> _buffer = data is not null ? [..data] : [];
+            private List<byte> _buffer = data is not null ? [.. data] : [];
             public static bool IsLittleEndian { get => BitConverter.IsLittleEndian; }
             public bool Complete { get => cursor == _buffer.Count; }
             public void Add(byte value)
@@ -73,13 +73,13 @@ namespace ClemToken
                 cursor += count;
                 if (!IsLittleEndian)
                 {
-                    return [..result.Reverse<byte>()]; // added type specification to use the Linq version
+                    return [.. result.Reverse<byte>()]; // added type specification to use the Linq version
                 }
-                return [..result];
+                return [.. result];
             }
             public byte[] GetAllBytes()
             {
-                return [.._buffer];
+                return [.. _buffer];
             }
             public byte[] GetBytesUntil(byte terminator)
             {
@@ -95,9 +95,9 @@ namespace ClemToken
                 if (cursor == start + 1) return [];
                 if (!IsLittleEndian)
                 {
-                    return [.._buffer.Take(start..(cursor - 1)).Reverse()];
+                    return [.. _buffer.Take(start..(cursor - 1)).Reverse()];
                 }
-                return [.._buffer.Take(start..(cursor - 1))];
+                return [.. _buffer.Take(start..(cursor - 1))];
             }
         }
         public static byte[] Serialize(Rule[] rules)

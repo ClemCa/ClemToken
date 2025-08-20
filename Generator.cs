@@ -368,14 +368,14 @@ namespace ClemToken
                     }
                     else if (tk is Optional)
                     {
-                        int closingBracket = line[i..].IndexOf(']');
+                        int closingBracket = PairedIndex(line, '[', ']', i - acc.Length + 1, startState: 1);
                         if (closingBracket == -1)
                         {
                             throw new Exception("Unmatched opening bracket in optional: " + line[i..Math.Min(i + 10, line.Length)]);
                         }
-                        tk = ExploreOptional(line[(i - acc.Length + 1)..(i+closingBracket)]);
-                        tk.Value = line[(i - acc.Length)..(i+closingBracket + 1)];
-                        i = i + closingBracket + 1;
+                        tk = ExploreOptional(line[(i - acc.Length + 1)..closingBracket]);
+                        tk.Value = line[(i - acc.Length)..(closingBracket + 1)];
+                        i = closingBracket + 1;
                         Console.WriteLine("Found optional: " + tk.Value);
                     }
                     else
@@ -441,6 +441,49 @@ namespace ClemToken
             }
             return root;
         }
+        private static string[] PairedSplit(string text, string split, char open, char close, int splitDepth = 0, int startState = 0)
+        {
+            List<string> parts = new List<string>();
+            int depth = startState;
+            int cursor = 0;
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (text[i] == open)
+                {
+                    depth++;
+                }
+                else if (text[i] == close)
+                {
+                    depth--;
+                }
+                if (depth < 0)
+                {
+                    throw new Exception("Unmatched closing character: " + close + " in text: " + text);
+                }
+                if (depth == splitDepth && text[i..].StartsWith(split))
+                {
+                    parts.Add(text[cursor..i]);
+                    i += split.Length - 1; // skip the split
+                    cursor = i + 1;
+                }
+            }
+            if(cursor != text.Length)
+            {
+                parts.Add(text[cursor..]); // add the last part
+            }
+            return [.. parts];
+        }
+        private static int PairedIndex(string text, char open, char close, int start = 0, int startState = 0)
+        {
+            int depth = startState;
+            for (int i = start; i < text.Length; i++)
+            {
+                if (text[i] == open) depth++;
+                if (text[i] == close) depth--;
+                if (depth == 0) return i;
+            }
+            return -1;
+        }
 
         private static Rule[] ExploreSubgroups(string text)
         {
@@ -488,10 +531,10 @@ namespace ClemToken
                         }
                         if (tk is Optional)
                         {
-                            int closingBracket = text.IndexOf(']', i);
+                            int closingBracket = PairedIndex(text, '[', ']', i+1, startState: 1);
                             if (closingBracket == -1)
                             {
-                                throw new Exception("Unmatched opening bracket in optional: " + text[i..Math.Min(i + 10, text.Length)]);
+                                throw new Exception("Unmatched opening bracket in optional: " + text[i..text.Length]);
                             }
                             tk = ExploreOptional(text[(i + 1)..closingBracket]);
                             tk.Value = text[i..(closingBracket + 1)];
@@ -511,8 +554,9 @@ namespace ClemToken
         private static Rule ExploreOptional(string text)
         {
             var optional = new Optional();
-            string[] split = text.Split(" | ");
+            string[] split = PairedSplit(text, " | ", '[', ']');
             List<Rule> options = new List<Rule>();
+            Console.WriteLine("Generator split: " + string.Join(", ", split)+" from "+text);
             foreach (var part in split)
             {
                 Rule[] ch = ExploreSubgroups(part);

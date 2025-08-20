@@ -364,7 +364,7 @@ ClemToken
   )
   (
     name: declaration
-    value: var example = (
+    value: var example = () => {
     (
       name: var
       value: var
@@ -383,62 +383,38 @@ ClemToken
     )
     (
       name: expression
-      value: (
+      value: () => {
       (
-        name: identifier
-        value: (
+        name: lambda
+        value: () => {
         (
-          name: name
-          value: (
+          name: inline
+          value: () => {
+          (
+            name: (
+            value: (
+          )
+          (
+            name: )
+            value: )
+          )
+          (
+            name: =>
+            value: =>
+          )
+          (
+            name: expression
+            value: {
+            (
+              name: identifier
+              value: {
+              (
+                name: name
+                value: {
+              )
+            )
+          )
         )
-      )
-    )
-  )
-  (
-    name: expression
-    value: )
-    (
-      name: identifier
-      value: )
-      (
-        name: name
-        value: )
-      )
-    )
-  )
-  (
-    name: expression
-    value: =
-    (
-      name: identifier
-      value: =
-      (
-        name: name
-        value: =
-      )
-    )
-  )
-  (
-    name: expression
-    value: >
-    (
-      name: identifier
-      value: >
-      (
-        name: name
-        value: >
-      )
-    )
-  )
-  (
-    name: expression
-    value: {
-    (
-      name: identifier
-      value: {
-      (
-        name: name
-        value: {
       )
     )
   )

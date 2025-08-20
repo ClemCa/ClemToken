@@ -29,6 +29,7 @@ if %choice%==1 (
     dotnet run -p:StartupObject=ClemToken.Program -- -f test_generated.at -i test_code.txt
 ) else if %choice%==6 (
     echo Running Full Pipeline test...
+    dotnet run -p:StartupObject=ClemToken.Program -- -f test_grammar.ct -O test_generated_raw.txt
     dotnet run -p:StartupObject=ClemToken.Program -- -f test_grammar.ct -o test_generated.at
     dotnet run -p:StartupObject=ClemToken.Program -- -f test_generated.at -i test_code.txt > test_full_pipeline.cta
 ) else if %choice%==0 (
