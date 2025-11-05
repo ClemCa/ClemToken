@@ -57,7 +57,7 @@ namespace ClemToken
             var consoleOut = Console.Out;
             Console.Out.Flush();
             Console.SetOut(TextWriter.Null);
-            var rules = Generator.Generate(grammarText);
+            var (rules, specs) = Generator.Generate(grammarText);
             // turn console back on
             Console.SetOut(consoleOut);
             var text = File.ReadAllText(file);
@@ -73,7 +73,7 @@ namespace ClemToken
                 Console.SetOut(writer);
                 try
                 {
-                    generatedTree = ParserV3.Parse(line, rules);
+                    generatedTree = ParserV3.Parse(line, rules, specs);
                     Console.SetOut(consoleOut);
                 }
                 catch (Exception e)
@@ -117,7 +117,7 @@ namespace ClemToken
                 Console.Out.Flush();
                 Console.SetOut(TextWriter.Null); // turn console off
                 var start = DateTime.Now;
-                var generatedTree = Generator.Generate(line)[0];
+                var generatedTree = Generator.Generate(line).rules[0];
                 try
                 {
                     DetailedComparison(generatedTree, tree);

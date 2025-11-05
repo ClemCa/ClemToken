@@ -16,7 +16,7 @@ class ParserV3Tester
     {
         var res = ParserV3.Parse("test", [
             new Simple("test"),
-        ], new ReferenceStore());
+        ], new SpecStore(), new ReferenceStore());
         Console.WriteLine(Stringify(res));
     }
     private static void Test1()
@@ -27,7 +27,7 @@ class ParserV3Tester
                 new Simple("b"),
                 new Simple("c")
             ]),
-        ], new ReferenceStore());
+        ], new SpecStore(), new ReferenceStore());
         Console.WriteLine(Stringify(res));
     }
     private static void Test2()
@@ -40,7 +40,7 @@ class ParserV3Tester
                 new Reserved("[name]"),
                 new Simple(";")
             ]),
-        ], new ReferenceStore());
+        ], new SpecStore(), new ReferenceStore());
         Console.WriteLine(Stringify(res));
     }
     private static void Test3()
@@ -53,7 +53,7 @@ class ParserV3Tester
                 new Reserved("[name]"),
                 new Simple(";")
             ]),
-        ], new ReferenceStore());
+        ], new SpecStore(), new ReferenceStore());
         Console.WriteLine(Stringify(res));
     }
     private static void Test4()
@@ -66,7 +66,7 @@ class ParserV3Tester
                 new Reserved("[name]"),
                 new Simple(";")
             ]),
-        ], new ReferenceStore());
+        ], new SpecStore(), new ReferenceStore());
         Console.WriteLine(Stringify(res));
     }
     private static void Test5()
@@ -88,7 +88,7 @@ class ParserV3Tester
                 new Reference("@number"),
                 new Simple(";")
             ]),
-        ], preloadedRules);
+        ], new SpecStore(), preloadedRules);
         Console.WriteLine(Stringify(res));
     }
     private static void Test6()
@@ -110,7 +110,7 @@ class ParserV3Tester
                 new Reference("@number"),
                 new Simple(";")
             ]),
-        ], preloadedRules);
+        ], new SpecStore(), preloadedRules);
         Console.WriteLine(Stringify(res));
     }
     private static string Stringify(Tree tree, int depth = 0)

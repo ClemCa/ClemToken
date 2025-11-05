@@ -3,6 +3,7 @@
     public static class Utils
     {
         private static Rule[]? preloadedRules;
+        private static Spec[]? preloadedSpecs;
         public static void ToGrammar(this string grammar, string path) => GenerateGrammar(grammar, path);
         public static void ToGrammar(this string grammar, BinaryWriter writer) => GenerateGrammar(grammar, writer);
         public static void PreloadAsGrammar(this string path) => PreloadGrammar(path);
@@ -23,30 +24,30 @@
         }
         public static void PreloadGrammar(string path)
         {
-            preloadedRules = Serializer.Deserialize(File.ReadAllBytes(path));
+            (preloadedRules, preloadedSpecs) = Serializer.Deserialize(File.ReadAllBytes(path));
         }
         public static Navigator Parse(string text, string grammarPath)
         {
-            var rules = Serializer.Deserialize(File.ReadAllBytes(grammarPath));
-            var tree = ParserV3.Parse(text, rules);
+            var (rules, specs) = Serializer.Deserialize(File.ReadAllBytes(grammarPath));
+            var tree = ParserV3.Parse(text, rules, specs);
             return new Navigator(tree);
         }
         public static Navigator Parse(string text, BinaryReader reader)
         {
-            var rules = Serializer.Deserialize(reader.ReadBytes((int)reader.BaseStream.Length));
+            var (rules, specs) = Serializer.Deserialize(reader.ReadBytes((int)reader.BaseStream.Length));
             // length would wrap if the file is too big, but at that point there's no looping solution with a binary reader (the position argument is int)
             // so I'd need to implement streaming deserialization
             // byte arrays are also limited to less than int max value, so I couldn't compound it if I wanted to
-            var tree = ParserV3.Parse(text, rules);
+            var tree = ParserV3.Parse(text, rules, specs);
             return new Navigator(tree);
         }
         public static Navigator ParsePreloaded(string text)
         {
-            if (preloadedRules == null)
+            if (preloadedRules == null || preloadedSpecs == null)
             {
                 throw new InvalidOperationException("No grammar has been preloaded");
             }
-            var tree = ParserV3.Parse(text, preloadedRules);
+            var tree = ParserV3.Parse(text, preloadedRules, preloadedSpecs);
             return new Navigator(tree);
         }
     }
@@ -90,7 +91,7 @@
                     string grammar = File.ReadAllText(file);
                     var consoleOut = Console.Out;
                     // Console.SetOut(TextWriter.Null); // turn console off to avoid cluttering the output
-                    var result = Generator.Generate(grammar);
+                    var (result, specs) = Generator.Generate(grammar);
                     if (args[2] == "-O")
                     {
                         var text = Serializer.DisplayRules(result);
@@ -98,7 +99,7 @@
                         File.WriteAllText(output, text);
                         return;
                     }
-                    var bytes = Serializer.Serialize(result);
+                    var bytes = Serializer.Serialize(result, specs);
                     Console.SetOut(consoleOut); // turn console back on
                     File.WriteAllBytes(output, bytes);
                     return;
@@ -138,11 +139,12 @@
                     }
                     var consoleOut = Console.Out;
                     Console.SetOut(TextWriter.Null); // turn console off to avoid cluttering the output
-                    var rules = Serializer.Deserialize(File.ReadAllBytes(file));
+                    var (rules, specs) = Serializer.Deserialize(File.ReadAllBytes(file));
                     var writer = new StringWriter();
                     Tree result;
                     Console.SetOut(writer);
                     Console.WriteLine("Parsing...");
+                    Console.WriteLine("Specs: " + specs.Length);
                     Console.WriteLine("Rules: " + rules.Length);
                     Console.WriteLine("Text: " + text);
                     foreach (var rule in rules)
@@ -151,7 +153,7 @@
                     }
                     try
                     {
-                        result = ParserV3.Parse(text, rules);
+                        result = ParserV3.Parse(text, rules, specs);
                         File.WriteAllText("parse_log.txt", writer.ToString());
                     }
                     catch (Exception e)
