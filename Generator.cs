@@ -232,7 +232,7 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children
         {
-            get => ProcessChildren.Select((c) => c as Rule).ToArray(); set
+            get => [.. ProcessChildren.Select((c) => c as Rule)]; set
             {
                 int line = Line;
                 int column = Column;
@@ -274,22 +274,57 @@ namespace ClemToken
         }
     }
 
+    struct Spec
+    {
+        public string Target { get; set; }
+        public string Definition { get; set; }
+    }
+
     partial class Generator
     {
         private string[] reserved = ["name"];
-        public static Rule[] Generate(string grammar)
+        public static (Rule[] rules, Spec[] specs) Generate(string grammar)
         {
             string[] parts = [.. Split(grammar).Select((p) => p.Trim()).Where((p) => p != "")];
             List<Rule> rules = new List<Rule>();
+            List<Spec> specs = new List<Spec>();
             foreach (var part in parts)
             {
+                if (ParseSpec(part, out Spec spec))
+                {
+                    Console.WriteLine("Found spec: " + spec.Target + " = " + spec.Definition);
+                    specs.Add(spec);
+                    continue;
+                }
                 Rule rule = ParseLine(part);
                 if (rule is not ProcessRule)
                 {
                     rules.Add(rule);
                 }
             }
-            return rules.ToArray();
+            return ([..rules], [..specs]);
+        }
+
+        private static bool ParseSpec(string line, out Spec spec)
+        {
+            spec = new Spec();
+            if (line.StartsWith("$"))
+            {
+                int colonIndex = line.IndexOf(':');
+                if (colonIndex == -1)
+                {
+                    throw new Exception("Invalid spec, missing colon: " + line);
+                }
+                string target = line[1..colonIndex].Trim();
+                string definition = line[(colonIndex + 1)..].Trim();
+                spec = new Spec
+                {
+                    Target = target,
+                    Definition = definition
+                };
+                return true;
+            }
+            return false;
         }
 
         private static Rule ParseLine(string line, bool inAnchor = false)

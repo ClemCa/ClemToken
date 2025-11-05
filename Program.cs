@@ -11,14 +11,14 @@
         public static Navigator Parse(this string text) => Parse(text);
         public static void GenerateGrammar(string grammar, string path)
         {
-            var rules = Generator.Generate(grammar);
-            var bytes = Serializer.Serialize(rules);
+            var (rules, specs) = Generator.Generate(grammar);
+            var bytes = Serializer.Serialize(rules, specs);
             File.WriteAllBytes(path, bytes);
         }
         public static void GenerateGrammar(string grammar, BinaryWriter writer)
         {
-            var rules = Generator.Generate(grammar);
-            var bytes = Serializer.Serialize(rules);
+            var (rules, specs) = Generator.Generate(grammar);
+            var bytes = Serializer.Serialize(rules, specs);
             writer.Write(bytes);
         }
         public static void PreloadGrammar(string path)

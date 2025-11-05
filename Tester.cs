@@ -62,6 +62,7 @@ namespace ClemToken
             Console.SetOut(consoleOut);
             var text = File.ReadAllText(file);
             int test = 0;
+            StringWriter writer = new();
             while (!string.IsNullOrWhiteSpace(text))
             {
                 test++;
@@ -69,7 +70,7 @@ namespace ClemToken
                 var startTime = DateTime.Now;
                 Tree generatedTree;
                 Console.Out.Flush();
-                Console.SetOut(TextWriter.Null);
+                Console.SetOut(writer);
                 try
                 {
                     generatedTree = ParserV3.Parse(line, rules);
@@ -80,7 +81,7 @@ namespace ClemToken
                     Console.SetOut(consoleOut);
                     // string used_grammar = Serializer.DisplayRules(rules);
                     // Console.WriteLine("Used grammar:\n" + used_grammar);
-                    Console.WriteLine("Test " + test + " errored: " + e.Message+ "\n"+e.StackTrace);
+                    Console.WriteLine("Test " + test + " errored: " + e.Message + "\n" + e.StackTrace);
                     continue;
                 }
                 try
@@ -97,6 +98,7 @@ namespace ClemToken
                     Console.WriteLine();
                 }
             }
+            File.WriteAllText("parse_log.txt", writer.ToString());
         }
         public static void TestGenerator(string file)
         {

@@ -194,18 +194,25 @@ class ParserV3
                 }
                 return NonGroupChildrenCheck(anchor, cursor, expandAllowed, out newCursor, out ruleTree, out expandLimit);
             case Optional optional:
+                // TODO fix outdated logic to get priority right (seems to prefer the next rule instead)
+                LogAt("> "+optional.Name+" ("+optional.Value+")", depth);
                 var tempGroup = new Group((1, 1), false) // workaround to reuse the expansion code
                 {
                     Children = [optional.Children[0]]
                 };
-                foreach (var child in optional.Children)
+                for (int i = 0; i < optional.Children.Length; i++)
                 {
+                    var child = optional.Children[i];
+                    tempGroup.Name = optional.Name + "_" + i;
                     tempGroup.Children[0] = child; // only child set here to avoid reallocation
                     if (SingleGroupCheck(code, cursor, expandAllowed, tempGroup, referenceStore, out newCursor, out var singleRuleTree, out expandLimit, depth + 1))
                     {
-                        LogAt($"Optional matched: {optional.Name} at cursor {cursor} ({singleRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                        LogAt($"Optional matched: {optional.Name} ({optional.Value}) at cursor {cursor} ({singleRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                         ruleTree = singleRuleTree.HasValue ? singleRuleTree.Value.Children[0] : null; // unwrap the group
                         return true;
+                    } else
+                    {
+                        LogAt($"Optional not matched: {optional.Name} ({optional.Value}) at cursor {cursor} | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                     }
                 }
                 ruleTree = null;
@@ -354,6 +361,7 @@ class ParserV3
 
     static bool SingleGroupCheck(string code, int cursor, int expandAllowed, Group group, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth) // no repetition, just the children
     {
+        LogAt($">> {group.Name} ({group.Value})", depth);
         newCursor = cursor; // always at the latest validated place
         int targetCursor = newCursor; // can creep forward to check against whitespace
         bool previousWasExpandable = false;
@@ -370,6 +378,7 @@ class ParserV3
         for (int i = 0; i < group.Children.Length; i++)
         {
             var child = group.Children[i];
+            LogAt($">? {child.Name} ({child.Value})", depth);
             if (!Check(code, targetCursor, 0, child, referenceStore, out int childCursor, out Tree? childTree, out int childExpandLimit, depth + 1))
             {
                 if (targetCursor >= code.Length)

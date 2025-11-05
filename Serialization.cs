@@ -11,7 +11,9 @@ namespace ClemToken
         //! 3: implicit groups no longer supported
         //! 4: use of two-way serialization & generic marshaling
         //! 5: ignored for reserved
-        private const int Version = 4;
+        //! 6: optionals
+        //! 7: specs
+        private const int Version = 6;
         public static string StringSerializeTree(Tree tree)
         {
             StringBuilder sb = new();
@@ -100,10 +102,20 @@ namespace ClemToken
                 return [.. _buffer.Take(start..(cursor - 1))];
             }
         }
-        public static byte[] Serialize(Rule[] rules)
+        public static byte[] Serialize(Rule[] rules, Spec[] specs)
         {
             ByteBuffer bytes = new(writeMode: true);
             bytes.Add(BitConverter.GetBytes((short)Version));
+            ByteBuffer specBytesBuffer = new(writeMode: true);
+            foreach (var spec in specs)
+            {
+                Console.WriteLine($"Serializing spec for target '{spec.Target}'");
+                _ = MirrorSpec(spec, specBytesBuffer);
+            }
+            int specBytes = specBytesBuffer.GetAllBytes().Length;
+            bytes.Add(BitConverter.GetBytes(specBytes));
+            bytes.Add(specBytesBuffer.GetAllBytes());
+            Console.WriteLine($"Serialized {specs.Length} specs.");
             for (int i = 0; i < rules.Length; i++)
             {
                 Console.WriteLine($"Serializing rule {i + 1} of {rules.Length}");
@@ -112,12 +124,13 @@ namespace ClemToken
             Console.WriteLine($"Serialized {rules.Length} rules.");
             return bytes.GetAllBytes();
         }
-        public static Rule[] Deserialize(byte[] data)
+        public static (Rule[] rules, Spec[] specs) Deserialize(byte[] data)
         {
             if (data.Length < 2)
             {
                 throw new Exception("Invalid serialization data");
             }
+            List<Spec> specs = [];
             List<Rule> rules = [];
             ByteBuffer bytes = new(data);
             int version = BitConverter.ToInt16(bytes.GetBytes(2), 0);
@@ -125,13 +138,26 @@ namespace ClemToken
             {
                 throw new Exception($"Incompatible serialization version, expected {Version}, got " + version);
             }
+            int specBytes = BitConverter.ToInt32(bytes.GetBytes(8), 0);
+            var specBuffer = new ByteBuffer(bytes.GetBytes((int)specBytes));
+            while (!specBuffer.Complete)
+            {
+                specs.Add(MirrorSpec(new Spec(), specBuffer));
+            }
+            Console.WriteLine("All specs deserialized.");
             while (!bytes.Complete)
             {
                 Console.WriteLine($"Rule {rules.Count + 1}");
                 rules.Add(MirrorRule(new ProcessRule(), bytes));
             }
             Console.WriteLine("All rules deserialized.");
-            return [.. rules];
+            return ([.. rules], [.. specs]);
+        }
+        public static Spec MirrorSpec(Spec spec, ByteBuffer bytes)
+        {
+            spec.Target = Mirror(spec.Target ?? "", bytes);
+            spec.Definition = Mirror(spec.Definition ?? "", bytes);
+            return spec;
         }
         public static Rule MirrorRule(Rule rule, ByteBuffer bytes)
         {
