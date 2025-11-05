@@ -265,3 +265,80 @@ var code = "hello world";
         )
     )
 )
+```
+var example = () => {
+  Log("hello world");
+};
+```
+(
+    Name: Root
+    (
+        Name: statement
+        Value: var example = () => {\n  Log("hello world");\n};
+        (
+            Name: declaration
+            Value: var example = () => {\n  Log("hello world");\n}
+            (
+                Name: var
+                Value: var
+            )
+            (
+                Name: identifier
+                Value: example
+                (
+                    Name: name
+                    Value: example
+                )
+            )
+            (
+                Name: =
+                Value: =
+            )
+            (
+                Name: expression
+                Value: () => {\n  Log("hello world");\n}
+                (
+                    Name: lambda
+                    Value: () => {\n  Log("hello world");\n}
+                    (
+                        Name: implicit_parameters
+                        Value: ()
+                    )
+                    (
+                        Name: body
+                        Value: {\n  Log("hello world");\n}
+                        (
+                            Name: statement
+                            Value: Log("hello world");
+                            (
+                                Name: call
+                                Value: Log("hello world")
+                                (
+                                    Name: identifier
+                                    Value: Log
+                                    (
+                                        Name: name
+                                        Value: Log
+                                    )
+                                )
+                                (
+                                    Name: arguments
+                                    Value: ("hello world")
+                                    (
+                                        Name: (
+                                        Value: (
+                                        )
+                                    TODO continue
+                                    )
+                                )
+                        )
+                    )
+                )
+            )
+        )
+        (
+            Name: ;
+            Value: ;
+        )
+    )
+)
