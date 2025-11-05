@@ -1,3 +1,9 @@
+parse_log.txt
+test_full_pipeline.cta
+test_generated_raw.txt
+test_generated.at
+
+
 # Created by https://www.toptal.com/developers/gitignore/api/csharp
 # Edit at https://www.toptal.com/developers/gitignore?templates=csharp
 
@@ -400,3 +406,4 @@ FodyWeavers.xsd
 *.sln.iml
 
 # End of https://www.toptal.com/developers/gitignore/api/csharp
+parse_log.txt
