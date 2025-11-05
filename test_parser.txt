@@ -322,15 +322,46 @@ var example = () => {
                                     )
                                 )
                                 (
+                                    Name: (
+                                    Value: (
+                                )
+                                (
                                     Name: arguments
-                                    Value: ("hello world")
+                                    Value: "hello world"
                                     (
-                                        Name: (
-                                        Value: (
+                                        Name: expression
+                                        Value: "hello world"
+                                        (
+                                            Name: literal
+                                            Value: "hello world"
+                                            (
+                                                Name: string
+                                                Value: "hello world"
+                                                (
+                                                    Name: "
+                                                    Value: "
+                                                )
+                                                (
+                                                    Name: content
+                                                    Value: hello world
+                                                )
+                                                (
+                                                    Name: "
+                                                    Value: "
+                                                )
+                                            )
                                         )
-                                    TODO continue
                                     )
                                 )
+                                (
+                                    Name: )
+                                    Value: )
+                                )
+                            )
+                            (
+                                Name: ;
+                                Value: ;
+                            )
                         )
                     )
                 )
