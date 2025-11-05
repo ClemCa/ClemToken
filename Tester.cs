@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace ClemToken
 {
 
@@ -192,14 +194,12 @@ namespace ClemToken
             {
                 throw new Exception($"[Step {step}] Name mismatch: (Parsed) {parsed.Token.Name} != (Test) {tree.Name}");
             }
-            if (tree.Value != null && parsed.Token.Value != tree.Value)
+            if (tree.Value != null && parsed.Token.Value.Replace("\r\n", "\n") != tree.Value.Replace("\r\n", "\n"))
             {
-                throw new Exception($"[Step {step}] Value mismatch: (Parsed) {parsed.Token.Value} != (Test) {tree.Value} --- {parsed.Token.Name}");
+                throw new Exception($"[Step {step}] Value mismatch: (Parsed, length {parsed.Token.Value.Length}) {parsed.Token.Value} != (Test, length {tree.Value.Length}) {tree.Value} --- {parsed.Token.Name}");
             }
             if (tree.Children.Count != parsed.Children.Count)
             {
-                Console.WriteLine($"(Parsed) n:{parsed.Token.Name} v:{parsed.Token.Value} c:{parsed.Children.Count}");
-                Console.WriteLine($"(Test) n:{tree.Name} v:{tree.Value} c:{tree.Children.Count}");
                 for (int i = 0; i < Math.Max(tree.Children.Count, parsed.Children.Count); i++)
                 {
                     Console.WriteLine("");
@@ -275,9 +275,9 @@ namespace ClemToken
                 else if (!Char.IsWhiteSpace(text[i]))
                 {
                     var index = text.IndexOf(':', i);
-                    var name = text.Substring(i, index - i).Trim();
+                    var name = text[i..index].Trim();
                     i = text.IndexOf('\n', index);
-                    var value = text.Substring(index + 1, i - index - 1).Trim();
+                    var value = DeEscape(text[(index + 1)..i].Trim(), 'n', 'r', 't');
                     TestingTree changeTree = new();
                     switch (name)
                     {
@@ -304,6 +304,58 @@ namespace ClemToken
             }
             text = text.Substring(i);
             return (line, tree);
+        }
+        static string DeEscape(string text, params char[] codes)
+        {
+            int depth = 0;
+            string result = "";
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (text[i] == '\\')
+                {
+                    depth++;
+                    result += text[i];
+                    continue;
+                }
+                bool matched = false;
+                foreach (var code in codes)
+                {
+                    if (text[i] == code)
+                    {
+                        matched = true;
+                        if (depth % 2 == 1)
+                        {
+                            switch (code)
+                            {
+                                case 'n':
+                                    result = result[..^1];
+                                    result += '\n';
+                                    break;
+                                case 'r':
+                                    result = result[..^1];
+                                    result += '\r';
+                                    break;
+                                case 't':
+                                    result = result[..^1];
+                                    result += '\t';
+                                    break;
+                                default:
+                                    result += code;
+                                    break;
+                            }
+                            depth = 0;
+                            break;
+                        }
+                        result += text[i];
+                        depth = 0;
+                        break;
+                    }
+                }
+                if (matched) continue;
+                result += text[i];
+                depth = 0;
+            }
+            return result;
         }
     }
 }
