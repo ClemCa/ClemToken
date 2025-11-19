@@ -105,7 +105,7 @@ namespace ClemToken
         public static byte[] Serialize(Rule[] rules, Spec[] specs)
         {
             ByteBuffer bytes = new(writeMode: true);
-            bytes.Add(BitConverter.GetBytes((short)Version));
+            Mirror((short)Version, bytes);
             ByteBuffer specBytesBuffer = new(writeMode: true);
             foreach (var spec in specs)
             {
@@ -113,7 +113,7 @@ namespace ClemToken
                 _ = MirrorSpec(spec, specBytesBuffer);
             }
             int specBytes = specBytesBuffer.GetAllBytes().Length;
-            bytes.Add(BitConverter.GetBytes(specBytes));
+            Mirror(specBytes, bytes);
             bytes.Add(specBytesBuffer.GetAllBytes());
             Console.WriteLine($"Serialized {specs.Length} specs.");
             for (int i = 0; i < rules.Length; i++)
@@ -133,13 +133,13 @@ namespace ClemToken
             List<Spec> specs = [];
             List<Rule> rules = [];
             ByteBuffer bytes = new(data);
-            int version = BitConverter.ToInt16(bytes.GetBytes(2), 0);
+            short version = Mirror((short)0, bytes);
             if (version != Version)
             {
                 throw new Exception($"Incompatible serialization version, expected {Version}, got " + version);
             }
-            int specBytes = BitConverter.ToInt32(bytes.GetBytes(8), 0);
-            var specBuffer = new ByteBuffer(bytes.GetBytes((int)specBytes));
+            int specBytes = Mirror(0, bytes);
+            var specBuffer = new ByteBuffer(bytes.GetBytes(specBytes));
             while (!specBuffer.Complete)
             {
                 specs.Add(MirrorSpec(new Spec(), specBuffer));
@@ -230,6 +230,14 @@ namespace ClemToken
                 bytes.Add(BitConverter.GetBytes(value));
             else
                 value = BitConverter.ToInt32(bytes.GetBytes(4), 0);
+            return value;
+        }
+        private static short Mirror(short value, ByteBuffer bytes)
+        {
+            if (bytes.WriteMode)
+                bytes.Add(BitConverter.GetBytes(value));
+            else
+                value = BitConverter.ToInt16(bytes.GetBytes(2), 0);
             return value;
         }
         private static bool Mirror(bool value, ByteBuffer bytes)
