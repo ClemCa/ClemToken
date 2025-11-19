@@ -301,11 +301,23 @@ var example = () => {
                     Name: lambda
                     Value: () => {\n  Log("hello world");\n}
                     (
-                        Name: implicit_parameters
-                        Value: ()
+                        Name: (
+                        Value: (
+                    )
+                    (
+                        Name: )
+                        Value: )
+                    )
+                    (
+                        Name: =>
+                        Value: =>
                     )
                     (
                         Name: body
+                        (
+                            Name: {
+                            Value: {
+                        )
                         Value: {\n  Log("hello world");\n}
                         (
                             Name: statement
@@ -362,6 +374,10 @@ var example = () => {
                                 Name: ;
                                 Value: ;
                             )
+                        )
+                        (
+                            Name: }
+                            Value: }
                         )
                     )
                 )

@@ -1,6 +1,3 @@
-
-using System.Diagnostics;
-using System.IO.Pipes;
 using System.Text.RegularExpressions;
 
 namespace ClemToken;
@@ -23,12 +20,13 @@ class SpecStore
         {
             return regex;
         }
+        Regex rgx;
         if (_specs.TryGetValue(name, out var spec))
-        {
-            return new Regex(spec.Definition);
-        }
-        var rgx = new Regex(defaultPattern);
+            rgx = new Regex(spec.Definition);
+        else
+            rgx = new Regex(defaultPattern);
         _regexCache[name] = rgx;
+        Console.WriteLine($"Spec '{name}' resolved to regex: {rgx}");
         return rgx;
     }
 }
@@ -140,10 +138,9 @@ class ParserV3
             if (Match(code, cursor, rules, specStore, referenceStore, out Tree? foundTree, out int newCursor, out int matchExpandLimit))
             {
                 cursor = newCursor;
+                expandLimit = matchExpandLimit;
                 if (foundTree == null)
-                {
                     continue;
-                }
                 tree.Children.Add(foundTree.Value);
                 expandLimit = matchExpandLimit;
             }
@@ -170,6 +167,7 @@ class ParserV3
                 }
             }
         }
+        Console.WriteLine($"Completed parsing at cursor {cursor}/{code.Length}");
         var addressedTree = WithCoordinates(tree);
         addressedTree = CleanIgnored(addressedTree);
         // LogAt($"Parsed tree: {Serializer.StringSerializeTree(addressedTree)}", depth);
@@ -230,7 +228,6 @@ class ParserV3
                 }
                 return NonGroupChildrenCheck(anchor, cursor, expandAllowed, out newCursor, out ruleTree, out expandLimit);
             case Optional optional:
-                // TODO fix outdated logic to get priority right (seems to prefer the next rule instead)
                 LogAt("> " + optional.Name + " (" + optional.Value + ")", depth);
                 var tempGroup = new Group((1, 1), false) // workaround to reuse the expansion code
                 {
@@ -238,13 +235,12 @@ class ParserV3
                 };
                 for (int i = 0; i < optional.Children.Length; i++)
                 {
-                    var child = optional.Children[i];
                     tempGroup.Name = optional.Name + "_" + i;
-                    tempGroup.Children[0] = child; // only child set here to avoid reallocation
+                    tempGroup.Children[0] = optional.Children[i]; // only child set here to avoid reallocation
                     if (SingleGroupCheck(code, cursor, expandAllowed, tempGroup, specStore, referenceStore, out newCursor, out var singleRuleTree, out expandLimit, depth + 1))
                     {
-                        LogAt($"Optional matched: {optional.Name} ({optional.Value}) at cursor {cursor} ({singleRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
-                        ruleTree = singleRuleTree.HasValue ? singleRuleTree.Value.Children[0] : null; // unwrap the group
+                        LogAt($"Optional matched: {optional.Name} ({optional.Value}) at cursor {cursor}, for {optional.Children[i].Name} ({optional.Children[i].Value}): ({singleRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                        ruleTree = singleRuleTree?.Children[0] ?? null; // unwrap the group
                         return true;
                     }
                     else
@@ -265,7 +261,9 @@ class ParserV3
                     {
                         if (expandAllowed > 0)
                         {
-                            return Check(code, cursor + 1, expandAllowed - 1, simple, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth + 1);
+                            bool res = Check(code, cursor + 1, expandAllowed - 1, simple, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth + 1);
+                            LogAt($"Simple expanded: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                            return res;
                         }
                         ruleTree = null; // No match for simple rule
                         return false;
@@ -279,6 +277,7 @@ class ParserV3
                     rt.Token.Line = cursor;
                     ruleTree = rt;
                 }
+                LogAt($"Simple matched: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                 return ngSuccess;
             case Reserved reserved:
                 if (reserved.Children.Length > 0)
@@ -298,7 +297,7 @@ class ParserV3
                             ruleTree = null;
                             return false;
                         }
-                        Regex nameRgx = specStore.GetSpec("name", @"[^\s]");
+                        Regex nameRgx = specStore.GetSpec("name", @"[^\s]*");
                         if (!nameRgx.IsMatch(code[cursor..(cursor + 1)]))
                         {
                             ruleTree = null;
@@ -306,10 +305,11 @@ class ParserV3
                         }
                         newCursor = cursor + 1; // just one for the minimum
                         ruleTree = new Tree(new Token("name", code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
-                        while ((newCursor + expandLimit) < code.Length && nameRgx.IsMatch(code.AsSpan(cursor..(newCursor + expandLimit))))
+                        while ((newCursor + expandLimit) < code.Length && nameRgx.FullMatch(code[cursor..(newCursor + expandLimit)]))
                         {
                             expandLimit++;
                         }
+                        Console.WriteLine($"Name regex match: {nameRgx} against '{code[cursor..(newCursor + expandLimit)]}' with expand limit {expandLimit}");
                         return true;
                     case "greedy": // like a name, but once it latches on it expands to the end of the file
                         if (char.IsWhiteSpace(code[cursor]))
@@ -341,7 +341,7 @@ class ParserV3
                                 return false;
                             }
                             newCursor = cursor + 1;
-                            while (newCursor < code.Length && customRgx.IsMatch(code.AsSpan(cursor..(newCursor+1))))
+                            while (newCursor < code.Length && customRgx.FullMatch(code[cursor..(newCursor+1)]))
                             {
                                 newCursor++;
                             }
@@ -363,10 +363,7 @@ class ParserV3
                     LogAt($"{referenceRule.Name} start", depth);
                 }
                 bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth + 1);
-                if (referenceRule.Name == "lambda")
-                {
-                    LogAt($"Lambda {success}", depth);
-                }
+                LogAt($"{referenceRule.Name} {(success ? "matched" : "not matched")} at cursor {cursor}->{newCursor}", depth);
                 return success;
             default:
                 throw new NotSupportedException($"Rule type {rule.GetType().Name} is not supported.");
@@ -551,6 +548,7 @@ class ParserV3
                 }
                 if (nullExpansionT1 > 0 || nullExpansionT2 > 0 || nullExpansionT3 > 0)
                 {
+                    LogAt($"Resetting null expansions", depth);
                     // reset
                     expandAllowed += nullExpansionT1;
                     expanded -= nullExpansionT2;
@@ -568,6 +566,8 @@ class ParserV3
             expandLimit = previousExpandLimit;
         }
         ruleTree = new Tree(new Token(group.Name, code[cursor..newCursor], cursor, 0, group.Ignored), children);
+        LogAt($"Group matched: {group.Name} ({group.Value}) at cursor {cursor}->{newCursor}: ({ruleTree.Value.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+        LogAt($"Rule:\n{Serializer.DisplayRules([group])}", depth);
         return true; // All children matched
     }
 }

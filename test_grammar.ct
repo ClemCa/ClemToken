@@ -1,5 +1,6 @@
 # NAME RULES
-# TODO implement specs
+# TODO implement specs in highlighting
+# TODO sub groups add error in generation to say it's not supported in optionals
 $name: [a-zA-Z_][a-zA-Z0-9_]*
 
 # MAIN
@@ -22,11 +23,7 @@ $name: [a-zA-Z_][a-zA-Z0-9_]*
 
 ## FUNCS
 @call: @identifier ( (@arguments):? )
-###################TODO################### FIX LAMBDAS, issue with optionals (parameters), instead of assuming there is something and continuing if none,
-########################################## maybe we should assume there's nothing and redo the step if there is, just like expansion works but
-########################################## by instead stepping back, that or treat repeat 0 results for groups more positively? the parser
-########################################## seems to prefer the next option in the optional to an empty group somehow, it could be outdated logic somewhere
-@lambda: [inline:(( parameters:(@implicit_parameters):? ) => @expression) | long:(( parameters:(@implicit_parameters):? ) => { body:(@statement)* })]
+@lambda: [inline:(( parameters:(@implicit_parameters):? ) => @expression): | long:(( parameters:(@implicit_parameters):? ) => body:({ statements:(@statement):* })):]
 
 ## VALUES
 @literal: [@string | @number | @boolean]

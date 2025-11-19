@@ -112,12 +112,13 @@ namespace ClemToken
             var text = File.ReadAllText(file);
             int test = 0;
             var consoleOut = Console.Out;
+            StringWriter writer = new();
             while (!string.IsNullOrWhiteSpace(text))
             {
                 test++;
                 var (line, tree) = GetPair(ref text);
                 Console.Out.Flush();
-                Console.SetOut(TextWriter.Null); // turn console off
+                Console.SetOut(writer); // write to string instead of console
                 var start = DateTime.Now;
                 var generatedTree = Generator.Generate(line).rules[0];
                 try
@@ -132,6 +133,7 @@ namespace ClemToken
                     Console.WriteLine($"Test {test} failed: {e.Message}");
                 }
             }
+            File.WriteAllText("generate_log.txt", writer.ToString());
         }
 
         static void DetailedComparison(Rule rule, TestingTree tree, int step = 0)

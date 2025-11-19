@@ -114,3 +114,85 @@ import @identifier _(. @identifier)* from @identifier ;
         Value: ;
     )
 )
+```
+@ex: [testA | testB]
+```
+(
+    Name: ex
+    Value: @ex:
+    (
+        Value: [testA | testB]
+        (
+            Name: testA
+            Value: testA
+        )
+        (
+            Name: testB
+            Value: testB
+        )
+    )
+)
+```
+@inline: ( parameters:(@implicit_parameters):? ) => @expression
+```
+(
+    Name: inline
+    Value: @inline:
+    (
+        Value: (
+    )
+    (
+        Name: parameters
+        Repeat: 0 1
+        (
+            Name: implicit_parameters
+            Value: @implicit_parameters
+        )
+    )
+    (
+        Value: )
+    )
+    (
+        Name: =>
+        Value: =>
+    )
+    (
+        Name: expression
+        Value: @expression
+    )
+)
+```
+@lambda: inline:(( parameters:(@implicit_parameters):? ) => @expression):
+```
+(
+    Name: lambda
+    Value: @lambda:
+    (
+        Name: inline
+        Repeat: 1 1
+        Ignored: true
+        (
+            Value: (
+        )
+        (
+            Name: parameters
+            Repeat: 0 1
+            Ignored: true
+            (
+                Name: implicit_parameters
+                Value: @implicit_parameters
+            )
+        )
+        (
+            Value: )
+        )
+        (
+            Name: =>
+            Value: =>
+        )
+        (
+            Name: expression
+            Value: @expression
+        )
+    )
+)

@@ -138,7 +138,7 @@ namespace ClemToken
         {
             IsReserved = false;
             Children = [];
-            if (prefix != null && prefix.Trim() != "" && prefix.Contains(":"))
+            if (prefix != null && prefix.Trim() != "" && prefix.Contains(':'))
             {
                 var parts = prefix.Split(':');
                 if (parts.Length > 2)
@@ -178,7 +178,7 @@ namespace ClemToken
                     case "":
                         break; // already looped
                     default:
-                        if (suffix.Contains("-"))
+                        if (suffix.Contains('-'))
                         {
                             string[] parts = suffix.Split('-');
                             if (int.TryParse(parts[0], out start) && int.TryParse(parts[1], out end))
@@ -187,17 +187,17 @@ namespace ClemToken
                             }
                             throw new Exception("Invalid (int, int): " + suffix);
                         }
-                        else if (int.TryParse(suffix, out start))
+                        else if (suffix.StartsWith(':'))
+                        {
+                            Ignored = true;
+                            suffix = suffix[1..];
+                            goto redo;
+                        } else if (int.TryParse(suffix, out start))
                         {
                             end = start;
                             break;
                         }
-                        else if (suffix.StartsWith(":"))
-                        {
-                            Ignored = true;
-                            suffix = suffix.Substring(1);
-                            goto redo;
-                        }
+                        else 
                         throw new Exception("Invalid suffix: " + suffix + " for: " + Name);
                 }
             }
@@ -308,7 +308,7 @@ namespace ClemToken
         private static bool ParseSpec(string line, out Spec spec)
         {
             spec = new Spec();
-            if (line.StartsWith("$"))
+            if (line.StartsWith('$'))
             {
                 int colonIndex = line.IndexOf(':');
                 if (colonIndex == -1)
@@ -329,13 +329,13 @@ namespace ClemToken
 
         private static Rule ParseLine(string line, bool inAnchor = false)
         {
-            if (line.StartsWith("#"))
+            if (line.StartsWith('#'))
             {
                 return new ProcessRule(); // comment
             }
             Rule? root = null;
             string anchor = "";
-            if (line.StartsWith("@"))
+            if (line.StartsWith('@'))
             {
                 for (int i = 0; i < line.Length; i++)
                 {
@@ -409,7 +409,6 @@ namespace ClemToken
                             throw new Exception("Unmatched opening bracket in optional: " + line[i..Math.Min(i + 10, line.Length)]);
                         }
                         tk = ExploreOptional(line[(i - acc.Length + 1)..closingBracket]);
-                        tk.Value = line[(i - acc.Length)..(closingBracket + 1)];
                         i = closingBracket + 1;
                         Console.WriteLine("Found optional: " + tk.Value);
                     }
@@ -437,7 +436,7 @@ namespace ClemToken
                 }
                 var ch = ExploreSubgroups(ver.Item2);
                 var token = GroupToToken(ver.Item2, ver.Item3, ver.Item4);
-                if (token.Item2.Name.Contains(" ") || token.Item2.Name == token.Item2.Value)
+                if (token.Item2.Name.Contains(' ') || token.Item2.Name == token.Item2.Value)
                     token.Item2.Name = "Anonymous";
                 token.Item2.Children = ch;
                 i += ver.Item2.Length + ver.Item3.Length + ver.Item4.Length + 2;
@@ -459,7 +458,7 @@ namespace ClemToken
                 }
                 else
                 {
-                    Console.WriteLine("Found group: " + token.Item2.Name);
+                    Console.WriteLine("Found group: " + token.Item2.Name+ $" {token.Item2.Repeat}");
                     if (root == null)
                     {
                         root = token.Item2;
@@ -571,8 +570,7 @@ namespace ClemToken
                             {
                                 throw new Exception("Unmatched opening bracket in optional: " + text[i..text.Length]);
                             }
-                            tk = ExploreOptional(text[(i + 1)..closingBracket]);
-                            tk.Value = text[i..(closingBracket + 1)];
+                            tk = ExploreOptional(text[(i+1)..closingBracket]);
                         }
                         if (tk is Anchor)
                         {
@@ -589,9 +587,9 @@ namespace ClemToken
         private static Rule ExploreOptional(string text)
         {
             var optional = new Optional();
+            optional.Value = "["+text+"]";
             string[] split = PairedSplit(text, " | ", '[', ']');
             List<Rule> options = new List<Rule>();
-            Console.WriteLine("Generator split: " + string.Join(", ", split)+" from "+text);
             foreach (var part in split)
             {
                 Rule[] ch = ExploreSubgroups(part);
@@ -650,7 +648,7 @@ namespace ClemToken
                     return (subgroup, group);
                 }
             }
-            if (token.StartsWith("@") && token.Length > 1)
+            if (token.StartsWith('@') && token.Length > 1)
             {
                 return (false, new Reference(token));
             }

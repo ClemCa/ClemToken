@@ -42,7 +42,7 @@ namespace ClemToken
         }
         public static void DisplayRule(Rule rule, StringBuilder stringBuilder, int depth = 0)
         {
-            stringBuilder.AppendLine(new string(' ', depth * 2) + rule.Name + " (" + rule.GetType().Name + ";" + rule.Value + ";" + rule.Repeat + ")");
+            stringBuilder.AppendLine(new string(' ', depth * 2) + rule.Name + " (" + rule.GetType().Name + ";" + rule.Value + ";" + rule.Repeat + "); ignored=" + rule.Ignored);
             foreach (var child in rule.Children)
             {
                 DisplayRule(child, stringBuilder, depth + 1);
