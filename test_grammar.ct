@@ -1,6 +1,4 @@
 # NAME RULES
-# TODO implement specs in highlighting
-# TODO sub groups add error in generation to say it's not supported in optionals
 $name: [a-zA-Z_][a-zA-Z0-9_]*
 
 # MAIN

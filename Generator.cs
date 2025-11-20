@@ -434,7 +434,7 @@ namespace ClemToken
                     }
                     continue;
                 }
-                var ch = ExploreSubgroups(ver.Item2);
+                var ch = ExploreSubgroups(ver.Item2, false);
                 var token = GroupToToken(ver.Item2, ver.Item3, ver.Item4);
                 if (token.Item2.Name.Contains(' ') || token.Item2.Name == token.Item2.Value)
                     token.Item2.Name = "Anonymous";
@@ -519,7 +519,7 @@ namespace ClemToken
             return -1;
         }
 
-        private static Rule[] ExploreSubgroups(string text)
+        private static Rule[] ExploreSubgroups(string text, bool inOptional)
         {
             List<Rule> rules = new List<Rule>();
             for (int i = 0; i < text.Length; i++)
@@ -531,11 +531,14 @@ namespace ClemToken
                     {
                         Console.WriteLine($"Found subgroup: {search.Item2}");
                         var (subgroup, token) = GroupToToken(search.Item2, search.Item3, search.Item4);
-                        // if (subgroup && rules.Count > 0)
-                        // {
-                        //     throw new Exception("Cannot have a subgroup as the first token of a rule: " + text[i..]);
-                        // }
-                        var children = ExploreSubgroups(search.Item2);
+                        if (subgroup)
+                        {
+                            if (inOptional)
+                                throw new Exception("Subgroups are not authorized in optionals: " + text[i..]);
+                            if (rules.Count == 0)
+                                throw new Exception("Cannot have a subgroup as the first token of a rule: " + text[i..]);
+                        }
+                        var children = ExploreSubgroups(search.Item2, false);
                         token.Children = children;
                         i += search.Item2.Length + search.Item3.Length + search.Item4.Length + 2;
                         if (subgroup)
@@ -592,7 +595,7 @@ namespace ClemToken
             List<Rule> options = new List<Rule>();
             foreach (var part in split)
             {
-                Rule[] ch = ExploreSubgroups(part);
+                Rule[] ch = ExploreSubgroups(part, inOptional: true);
                 if (ch.Length > 1)
                 {
                     throw new Exception("Optional can only have one child per branch: " + part);
