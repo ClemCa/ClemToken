@@ -9,7 +9,7 @@
         public static void PreloadAsGrammar(this string path) => PreloadGrammar(path);
         public static Navigator ParseWith(this string text, string grammarPath) => Parse(text, grammarPath);
         public static Navigator ParseWith(this string text, BinaryReader reader) => Parse(text, reader);
-        public static Navigator Parse(this string text) => Parse(text);
+        public static Navigator Parse(this string text) => ParsePreloaded(text);
         public static void GenerateGrammar(string grammar, string path)
         {
             var (rules, specs) = Generator.Generate(grammar);
