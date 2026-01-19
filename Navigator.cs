@@ -115,11 +115,21 @@ namespace ClemToken
         }
         public bool Previous()
         {
-            return status-- >= 0;
+            if (status <= 0)
+            {
+                return false;
+            }
+            status--;
+            return true;
         }
         public bool Next()
         {
-            return status++ < Tree.Children.Count;
+            if (status >= Tree.Children.Count - 1)
+            {
+                return false;
+            }
+            status++;
+            return true;
         }
         public bool PreviousSibling()
         {
@@ -153,6 +163,10 @@ namespace ClemToken
         }
         public bool NextIs(string name, string? value = null)
         {
+            if (status + 1 >= Tree.Children.Count)
+            {
+                return false;
+            }
             return Tree.Children[status + 1].Token.Name == name && (value == null || Tree.Children[status + 1].Token.Value == value);
         }
         public bool HasLeft(string name, string? value = null, int count = 1)
