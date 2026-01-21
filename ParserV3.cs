@@ -305,9 +305,13 @@ class ParserV3
                         }
                         newCursor = cursor + 1; // just one for the minimum
                         ruleTree = new Tree(new Token("name", code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
-                        while ((newCursor + expandLimit) < code.Length && nameRgx.FullMatch(code[cursor..(newCursor + expandLimit)]))
-                        {
-                            expandLimit++;
+                        { // new context to avoid reserving maxCursor in the switch
+                            var maxCursor = newCursor;
+                            while (maxCursor < code.Length && nameRgx.FullMatch(code[cursor..(maxCursor + 1)]))
+                            {
+                                maxCursor++;
+                            }
+                            expandLimit = Math.Max(0, maxCursor - newCursor);
                         }
                         Console.WriteLine($"Name regex match: {nameRgx} against '{code[cursor..(newCursor + expandLimit)]}' with expand limit {expandLimit}");
                         return true;
@@ -341,10 +345,12 @@ class ParserV3
                                 return false;
                             }
                             newCursor = cursor + 1;
-                            while (newCursor < code.Length && customRgx.FullMatch(code[cursor..(newCursor+1)]))
+                            var maxCursor = newCursor;
+                            while (maxCursor < code.Length && customRgx.FullMatch(code[cursor..(maxCursor + 1)]))
                             {
-                                newCursor++;
+                                maxCursor++;
                             }
+                            expandLimit = Math.Max(0, maxCursor - newCursor);
                             ruleTree = new Tree(new Token(reserved.Name, code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
                             return true;
                         }
