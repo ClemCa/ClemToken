@@ -379,6 +379,7 @@ class ParserV3
     {
         newCursor = cursor;
         expandLimit = 0;
+        int lastExpandLimit = 0;
         if (group.Repeat.Item1 == 0 && group.Repeat.Item2 == 0)
         {
             ruleTree = null;
@@ -390,12 +391,13 @@ class ParserV3
         {
             if (!SingleGroupCheck(code, newCursor, i == 0 ? expandAllowed : 0, group, specStore, referenceStore, out int iterationCursor, out Tree? groupTree, out int groupExpandLimit, depth))
             {
-                expandLimit = 0;
                 if (i < group.Repeat.Item1) // If we haven't matched the minimum required repetitions
                 {
+                    expandLimit = 0;
                     ruleTree = null; // Not enough repetitions matched
                     return false; // Not enough repetitions matched
                 }
+                expandLimit = lastExpandLimit;
                 break; // Stop if we reach the maximum or if no more matches are possible
             }
             if (groupTree == null)
@@ -405,6 +407,7 @@ class ParserV3
             children.Add(groupTree.Value);
             newCursor = iterationCursor;
             expandLimit = groupExpandLimit;
+            lastExpandLimit = groupExpandLimit;
         }
         if (children.Count == 0)
         {
