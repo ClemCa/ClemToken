@@ -483,7 +483,9 @@ class ParserV3
                 targetCursor = newCursor; // reset so the next child is checked against the original cursor if optional
                 if (child is Group childGroup && childGroup.Repeat.Item1 == 0) // optional children can be skipped
                 {
-                    previousWasExpandable = expanded > 0; // if the one before was expandable, it must have been expanded to its limit for the skipped child
+                    //! Modified
+                    // Keep expandable tail from previous matches so nested groups/optionals can still expand.
+                    // Skipping an optional child should not clear expandability of the last matched rule.
                     continue;
                 }
                 return false; // Child rule did not match
