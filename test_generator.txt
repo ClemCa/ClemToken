@@ -232,3 +232,34 @@ import @identifier _(. @identifier)* from @identifier ;
         )
     )
 )
+@test: [a | b | \] | d | \[ | \[\] ]
+(
+    Name: test
+    (
+        Value: [a | b | \] | d | \[ | \[\] ]
+        (
+            Name: a
+            Value: a
+        )
+        (
+            Name: b
+            Value: b
+        )
+        (
+            Name: ]
+            Value: ]
+        )
+        (
+            Name: d
+            Value: d
+        )
+        (
+            Name: [
+            Value: [
+        )
+        (
+            Name: []
+            Value: []
+        )
+    )
+)

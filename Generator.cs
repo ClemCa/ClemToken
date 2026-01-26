@@ -480,24 +480,23 @@ namespace ClemToken
         {
             List<string> parts = [""];
             int depth = startState;
-            int cursor = 0;
             bool skipNext = false;
             for (int i = 0; i < text.Length; i++)
             {
-                if (!skipNext)
+                if (text[i] == '\\' && !skipNext)
                 {
-                    switch (text[i])
-                    {
-                        case '\\':
-                            skipNext = true;
-                            continue;
-                        case char c when c == open:
-                            depth++;
-                            break;
-                        case char c when c == close:
-                            depth--;
-                            break;
-                    }
+                    skipNext = true;
+                    continue;
+                }
+                if (text[i] == open)
+                {
+                    if (!skipNext) depth++;
+                    else skipNext = false;
+                }
+                if (text[i] == close)
+                {
+                    if (!skipNext) depth--;
+                    else skipNext = false;
                 }
                 if (depth < 0)
                 {
@@ -512,7 +511,6 @@ namespace ClemToken
                 {
                     parts.Add("");
                     i += split.Length - 1; // skip the split
-                    cursor = i + 1;
                     continue;
                 }
                 parts[^1] += text[i];
@@ -649,7 +647,7 @@ namespace ClemToken
             {
                 return (false, new Anchor(token));
             }
-            else if (token.StartsWith('[') && !char.IsWhiteSpace(token[1]) && !token.Contains('|') && !token.Contains(']'))
+            else if (token.StartsWith('[') && token.Length > 1 && !char.IsWhiteSpace(token[1]) && !token.Contains('|') && !token.Contains(']'))
             {
                 return (false, new Optional());
             }
