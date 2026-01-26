@@ -5,7 +5,7 @@ namespace ClemToken;
 class SpecStore
 {
     private Dictionary<string, Spec> _specs = new();
-    private Dictionary<string, Regex> _regexCache = new();
+    private Dictionary<string, Checker> _checkerCache = new();
     public void AddSpec(Spec spec)
     {
         _specs[spec.Target] = spec;
@@ -14,20 +14,89 @@ class SpecStore
     {
         return _specs.ContainsKey(name);
     }
-    public Regex GetSpec(string name, string defaultPattern)
+    public Checker GetSpec(string name, string defaultPattern)
     {
-        if (_regexCache.TryGetValue(name, out var regex))
+        if (_checkerCache.TryGetValue(name, out var chk))
         {
-            return regex;
+            return chk;
         }
-        Regex rgx;
+        Checker checker;
         if (_specs.TryGetValue(name, out var spec))
-            rgx = new Regex(spec.Definition);
+        {
+            if (spec.Mode == "simple")
+                checker = new SimpleChecker(spec.Definition);
+            else // default to regex
+                checker = new RegexChecker(spec.Definition);
+        }
         else
-            rgx = new Regex(defaultPattern);
-        _regexCache[name] = rgx;
-        Console.WriteLine($"Spec '{name}' resolved to regex: {rgx}");
-        return rgx;
+            checker = new RegexChecker(defaultPattern);
+        _checkerCache[name] = checker;
+        Console.WriteLine($"Spec '{name}' resolved to regex: {checker}");
+        return checker;
+    }
+}
+
+abstract class Checker
+{
+    public abstract bool IsMatch(string text);
+    public abstract bool IsMatch(Span<char> text);
+    public abstract bool IsMatch(ReadOnlySpan<char> text);
+    public abstract bool FullMatch(string text);
+
+}
+
+class RegexChecker(string regexString): Checker
+{
+    private Regex _regex = new(regexString);
+    public override bool IsMatch(string text)
+    {
+        return _regex.IsMatch(text);
+    }
+    public override bool IsMatch(Span<char> text)
+    {
+        return _regex.IsMatch(text);
+    }
+    public override bool IsMatch(ReadOnlySpan<char> text)
+    {
+        return _regex.IsMatch(text);
+    }
+    public override bool FullMatch(string text)
+    {
+        return _regex.FullMatch(text);
+    }
+}
+
+class SimpleChecker(string checkString): Checker
+{
+    public override bool IsMatch(string text)
+    {
+        return text.Contains(checkString);
+    }
+    public override bool IsMatch(Span<char> text)
+    {
+        if (text.Length < checkString.Length)
+            return false;
+        for(int i = 0; i <= checkString.Length; i++)
+        {
+            if (text[i] != checkString[i])
+                return false;
+        }
+        return true;
+    }
+    public override bool IsMatch(ReadOnlySpan<char> text)
+    {
+        if (text.Length < checkString.Length)
+            return false;
+        for(int i = 0; i <= checkString.Length; i++)
+        {
+            if (text[i] != checkString[i])
+                return false;
+        }
+        return true;
+    }
+    public override bool FullMatch(string text)
+    {
+        return text == checkString;
     }
 }
 
@@ -297,7 +366,7 @@ class ParserV3
                             ruleTree = null;
                             return false;
                         }
-                        Regex nameRgx = specStore.GetSpec("name", @"[^\s]*");
+                        Checker nameRgx = specStore.GetSpec("name", @"[^\s]*");
                         if (!nameRgx.IsMatch(code[cursor..(cursor + 1)]))
                         {
                             ruleTree = null;
@@ -326,7 +395,7 @@ class ParserV3
                         expandLimit = code.Length - newCursor; // expand to the end of the file
                         return true;
                     case "digit":
-                        Regex digitRgx = specStore.GetSpec("digit", @"[0-9]");
+                        Checker digitRgx = specStore.GetSpec("digit", @"[0-9]");
                         if (digitRgx.IsMatch(code.AsSpan(cursor, 1)))
                         {
                             newCursor = cursor + 1;
@@ -338,7 +407,7 @@ class ParserV3
                     default:
                         if (specStore.HasSpec(reserved.Name)) // custom equivalent to name, except with support for starting with a whitespace
                         {
-                            Regex customRgx = specStore.GetSpec(reserved.Name, @".");
+                            Checker customRgx = specStore.GetSpec(reserved.Name, @".");
                             if (!customRgx.IsMatch(code[cursor..(cursor + 1)]))
                             {
                                 ruleTree = null;
