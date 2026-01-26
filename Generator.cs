@@ -63,8 +63,8 @@ namespace ClemToken
         public Reference(string value, bool optional = false, string? name = null)
         {
             int start = value.IndexOf('@');
-            Name = name ?? value.Substring(start + 1);
-            Value = value;
+            Name = value[(start + 1)..];
+            Value = name ?? value;
             Repeat = optional ? (0, 1) : (1, 1);
             Ignored = false;
             Children = [];

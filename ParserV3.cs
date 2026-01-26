@@ -368,8 +368,21 @@ class ParserV3
                 {
                     LogAt($"{referenceRule.Name} start", depth);
                 }
-                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth + 1);
-                LogAt($"{referenceRule.Name} {(success ? "matched" : "not matched")} at cursor {cursor}->{newCursor}", depth);
+                Tree? ruleOutput;
+                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, depth + 1);
+                if (!success && reference.Repeat.Item1 == 0)
+                {
+                    success = true;
+                    ruleOutput = null;
+                }
+                if (ruleOutput.HasValue && reference.Value != null && !reference.Value.Contains('@'))
+                {
+                    var val = ruleOutput.Value;
+                    val.Token.Name = reference.Value;
+                    ruleOutput = val;
+                }
+                LogAt($"{referenceRule.Name}{(ruleOutput != null && ruleOutput.Value.Token.Name != referenceRule.Name ? $" ({ruleOutput.Value.Token.Name})" : "")} {(success ? "matched" : "not matched")} at cursor {cursor}->{newCursor}", depth);
+                ruleTree = ruleOutput;
                 return success;
             default:
                 throw new NotSupportedException($"Rule type {rule.GetType().Name} is not supported.");
