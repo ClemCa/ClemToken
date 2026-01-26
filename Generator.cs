@@ -60,12 +60,12 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
-        public Reference(string value)
+        public Reference(string value, bool optional = false, string? name = null)
         {
             int start = value.IndexOf('@');
-            Name = value.Substring(start + 1);
+            Name = name ?? value.Substring(start + 1);
             Value = value;
-            Repeat = (1, 1);
+            Repeat = optional ? (0, 1) : (1, 1);
             Ignored = false;
             Children = [];
             IsReserved = false;
@@ -659,11 +659,64 @@ namespace ClemToken
             {
                 return (false, new Reference(token));
             }
+            if (token.StartsWith("?@") && token.Length > 2)
+            {
+                return (false, new Reference(token[1..], optional: true));
+            }
+            if (token.Contains("@"))
+            {
+                if (VerifyNamedReference(token, out Reference reference))
+                {
+                    return (false, reference);
+                }
+            }
             if ((token.StartsWith("$[") || token.StartsWith("$$[")) && token.EndsWith(']'))
             {
                 return (false, new Reserved(token, token.StartsWith("$$[")));
             }
             return (false, new Simple(token));
+        }
+
+        private static bool VerifyNamedReference(string text, out Reference reference)
+        {
+            bool optional = false;
+            string name = "";
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (char.IsWhiteSpace(text[i]))
+                {
+                    reference = new();
+                    return false;
+                }
+                if (text[i] == '@')
+                {
+                    reference = new();
+                    return false;
+                }
+                if (text[i] == ':')
+                {
+                    name = text[..i];
+                    break;
+                }
+            }
+            if (name == "")
+            {
+                reference = new();
+                return false;
+            }
+            string rest = text[(name.Length + 1)..];
+            if (rest.StartsWith('?'))
+            {
+                optional = true;
+                rest = rest[1..];
+            }
+            if (!rest.StartsWith('@'))
+            {
+                reference = new();
+                return false;
+            }
+            reference = new Reference(rest, optional, name);
+            return true;
         }
 
         private static (bool, string, string, string, bool) VerifyGroup(string text)
