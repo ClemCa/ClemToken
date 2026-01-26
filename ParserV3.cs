@@ -42,6 +42,9 @@ class SpecStore
 
 abstract class Checker
 {
+    protected string lastSearch = "";
+    protected int lastIndex = -1;
+    protected int lastLength = -1;
     public abstract bool IsMatch(string text);
     public abstract bool IsMatch(Span<char> text);
     public abstract bool IsMatch(ReadOnlySpan<char> text);
@@ -76,22 +79,38 @@ class RegexChecker(string regexString): Checker
     }
     public override int GetMatch(string text)
     {
+        if (text == lastSearch) return lastIndex;
         var match = _regex.Match(text);
+        lastSearch = text;
+        lastIndex = match.Success ? match.Index : -1;
+        lastLength = match.Success ? match.Length : -1;
         return match.Success ? match.Index : -1;
     }
     public override int GetMatch(Span<char> text)
     {
+        if (text.CompareTo(lastSearch, StringComparison.Ordinal) == 0) return lastIndex;
         var match = _regex.Match(text.ToString());
+        lastSearch = text.ToString();
+        lastIndex = match.Success ? match.Index : -1;
+        lastLength = match.Success ? match.Length : -1;
         return match.Success ? match.Index : -1;
     }
     public override int GetMatch(ReadOnlySpan<char> text)
     {
+        if (text.CompareTo(lastSearch.AsSpan(), StringComparison.Ordinal) == 0) return lastIndex;
         var match = _regex.Match(text.ToString());
+        lastSearch = text.ToString();
+        lastIndex = match.Success ? match.Index : -1;
+        lastLength = match.Success ? match.Length : -1;
         return match.Success ? match.Index : -1;
     }
     public override int GetMatchLength(string text)
     {
+        if (text == lastSearch) return lastLength;
         var match = _regex.Match(text);
+        lastSearch = text;
+        lastIndex = match.Success ? match.Index : -1;
+        lastLength = match.Success ? match.Length : -1;
         return match.Success ? match.Length : -1;
     }
 }
@@ -134,43 +153,24 @@ class SimpleChecker(string checkString): Checker
     }
     public override int GetMatch(string text)
     {
-        return text.IndexOf(checkString);
+        if (text == lastSearch) return lastIndex;
+        lastSearch = text;
+        lastIndex = text.IndexOf(checkString);
+        return lastIndex;
     }
     public override int GetMatch(Span<char> text)
     {
-        for (int i = 0; i < text.Length - checkString.Length; i++)
-        {
-            bool match = true;
-            for (int j = 0; j < checkString.Length; j++)
-            {
-                if (text[i + j] != checkString[j])
-                {
-                    match = false;
-                    break;
-                }
-            }
-            if (match)
-                return i;
-        }
-        return -1;
+        if (text.CompareTo(lastSearch, StringComparison.Ordinal) == 0) return lastIndex;
+        lastSearch = text.ToString();
+        lastIndex = text.ToString().IndexOf(checkString);
+        return lastIndex;
     }
     public override int GetMatch(ReadOnlySpan<char> text)
     {
-        for (int i = 0; i < text.Length - checkString.Length; i++)
-        {
-            bool match = true;
-            for (int j = 0; j < checkString.Length; j++)
-            {
-                if (text[i + j] != checkString[j])
-                {
-                    match = false;
-                    break;
-                }
-            }
-            if (match)
-                return i;
-        }
-        return -1;
+        if (text.CompareTo(lastSearch.AsSpan(), StringComparison.Ordinal) == 0) return lastIndex;
+        lastSearch = text.ToString();
+        lastIndex = text.ToString().IndexOf(checkString);
+        return lastIndex;
     }
     public override int GetMatchLength(string text)
     {
