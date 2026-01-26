@@ -13,7 +13,8 @@ namespace ClemToken
         //! 5: ignored for reserved
         //! 6: optionals
         //! 7: specs
-        private const int Version = 6;
+        //! 8: mode in specs & named/optional references
+        private const int Version = 8;
         public static string StringSerializeTree(Tree tree)
         {
             StringBuilder sb = new();
@@ -157,6 +158,7 @@ namespace ClemToken
         {
             spec.Target = Mirror(spec.Target ?? "", bytes);
             spec.Definition = Mirror(spec.Definition ?? "", bytes);
+            spec.Mode = Mirror(spec.Mode ?? "", bytes);
             return spec;
         }
         public static Rule MirrorRule(Rule rule, ByteBuffer bytes)
@@ -200,6 +202,10 @@ namespace ClemToken
                     Reference refRule = rule is Reference reference ? reference : new();
                     refRule.Name = Mirror(refRule.Name, bytes);
                     refRule.Children = [];
+                    refRule.Value = Mirror(refRule.Value ?? "", bytes);
+                    (int, int) refRepeat = refRule.Repeat;
+                    refRepeat.Item1 = Mirror(refRepeat.Item1, bytes);
+                    refRule.Repeat = refRepeat;
                     return refRule;
                 case 4:
                     Anchor a = rule is Anchor anchor ? anchor : new();

@@ -279,6 +279,7 @@ namespace ClemToken
     {
         public string Target { get; set; }
         public string Definition { get; set; }
+        public string Mode { get; set; }
     }
 
     partial class Generator
@@ -317,11 +318,31 @@ namespace ClemToken
                     throw new Exception("Invalid spec, missing colon: " + line);
                 }
                 string target = line[1..colonIndex].Trim();
-                string definition = line[(colonIndex + 1)..].Trim();
+                string rest = line[(colonIndex + 1)..].Trim();
+                string mode = "";
+                int modeColonIndex = rest.IndexOf(':');
+                if (modeColonIndex != -1)
+                {
+                    string modeString = rest[..modeColonIndex].Trim();
+                    bool isValid = false;
+                    for(int i = 0; i < modeString.Length; i++)
+                    {
+                        if (char.IsWhiteSpace(modeString[i]))
+                        {
+                            isValid = false;
+                            break;
+                        }
+                    }
+                    if (isValid) {
+                        rest = rest[(modeColonIndex + 1)..].Trim();
+                        mode = modeString;
+                    }
+                }
                 spec = new Spec
                 {
                     Target = target,
-                    Definition = definition
+                    Definition = rest,
+                    Mode = mode
                 };
                 return true;
             }
