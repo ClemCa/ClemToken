@@ -478,43 +478,66 @@ namespace ClemToken
         }
         private static string[] PairedSplit(string text, string split, char open, char close, int splitDepth = 0, int startState = 0)
         {
-            List<string> parts = new List<string>();
+            List<string> parts = [""];
             int depth = startState;
             int cursor = 0;
+            bool skipNext = false;
             for (int i = 0; i < text.Length; i++)
             {
-                if (text[i] == open)
+                if (!skipNext)
                 {
-                    depth++;
-                }
-                else if (text[i] == close)
-                {
-                    depth--;
+                    switch (text[i])
+                    {
+                        case '\\':
+                            skipNext = true;
+                            continue;
+                        case char c when c == open:
+                            depth++;
+                            break;
+                        case char c when c == close:
+                            depth--;
+                            break;
+                    }
                 }
                 if (depth < 0)
                 {
                     throw new Exception("Unmatched closing character: " + close + " in text: " + text);
                 }
+                if (skipNext)
+                {
+                    parts[^1] += '\\';
+                    skipNext = false;
+                }
                 if (depth == splitDepth && text[i..].StartsWith(split))
                 {
-                    parts.Add(text[cursor..i]);
+                    parts.Add("");
                     i += split.Length - 1; // skip the split
                     cursor = i + 1;
+                    continue;
                 }
+                parts[^1] += text[i];
             }
-            if (cursor != text.Length)
-            {
-                parts.Add(text[cursor..]); // add the last part
-            }
-            return [.. parts];
+            return [..parts];
         }
         private static int PairedIndex(string text, char open, char close, int start = 0, int startState = 0)
         {
             int depth = startState;
+            bool skipNext = false;
             for (int i = start; i < text.Length; i++)
             {
-                if (text[i] == open) depth++;
-                if (text[i] == close) depth--;
+                if (!skipNext) {
+                    if (text[i] == '\\')
+                    {
+                        skipNext = true;
+                        continue;
+                    }
+                    if (text[i] == open) depth++;
+                    if (text[i] == close) depth--;
+                }
+                if (skipNext)
+                {
+                    skipNext = false;
+                }
                 if (depth == 0) return i;
             }
             return -1;
@@ -599,7 +622,7 @@ namespace ClemToken
                 Rule[] ch = ExploreSubgroups(part, inOptional: true);
                 if (ch.Length > 1)
                 {
-                    throw new Exception("Optional can only have one child per branch: " + part);
+                    throw new Exception("Optional can only have one child per branch: " + part + $"::::: {split.Select((v) => "(" + v + ")").Aggregate((a, b) => a + " | " + b)}");
                 }
                 if (ch.Length == 0)
                 {
@@ -742,7 +765,7 @@ namespace ClemToken
                 return (false, "", "", "", false);
             }
             var end = text.IndexOf('(');
-            if (end+1 >= text.Length || char.IsWhiteSpace(text[end + 1]))
+            if (end + 1 >= text.Length || char.IsWhiteSpace(text[end + 1]))
             {
                 return (false, "", "", "", false);
             }
@@ -797,11 +820,16 @@ namespace ClemToken
             {
                 if (grammar[i] == '\r')
                 {
+                    if (skipNext && (i + 1 >= grammar.Length || grammar[i + 1] != '\n'))
+                    {
+                        parts[^1] += '\\';
+                        skipNext = false;
+                    }
                     continue;
                 }
                 if (grammar[i] == '\n')
                 {
-                    if (parts.Last() != "" && !skipNext)
+                    if (parts[^1] != "" && !skipNext)
                     {
                         parts.Add("");
                     }
@@ -810,7 +838,8 @@ namespace ClemToken
                 }
                 if (skipNext)
                 {
-                    parts[parts.Count - 1] += '\\';
+                    parts[^1] += '\\';
+                    skipNext = false;
                 }
                 if (grammar[i] == '\\')
                 {
@@ -819,7 +848,7 @@ namespace ClemToken
                 }
                 parts[^1] += grammar[i];
             }
-            return parts.ToArray();
+            return [.. parts];
         }
 
         private static string ReplaceOnce(string text, string search, string replace)

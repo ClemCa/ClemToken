@@ -196,3 +196,39 @@ import @identifier _(. @identifier)* from @identifier ;
         )
     )
 )
+@precendence_1_operators: [* | / | % | /: | // | \\ | \ ]
+(
+    Name: precendence_1_operators
+    Value: @precendence_1_operators:
+    (
+        Value: [* | / | % | /: | // | \\ | \ ]
+        (
+            Name: *
+            Value: *
+        )
+        (
+            Name: /
+            Value: /
+        )
+        (
+            Name: %
+            Value: %
+        )
+        (
+            Name: /:
+            Value: /:
+        )
+        (
+            Name: //
+            Value: //
+        )
+        (
+            Name: \\
+            Value: \\
+        )
+        (
+            Name: \
+            Value: \
+        )
+    )
+)
