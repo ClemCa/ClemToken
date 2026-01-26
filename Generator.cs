@@ -294,7 +294,7 @@ namespace ClemToken
             {
                 if (ParseSpec(part, out Spec spec))
                 {
-                    Console.WriteLine("Found spec: " + spec.Target + " = " + spec.Definition);
+                    Console.WriteLine("Found spec: " + spec.Target+ " (mode: "+(spec.Mode == "" ? "default" : spec.Mode)+")" + " = " + spec.Definition);
                     specs.Add(spec);
                     continue;
                 }
@@ -324,7 +324,7 @@ namespace ClemToken
                 if (modeColonIndex != -1)
                 {
                     string modeString = rest[..modeColonIndex].Trim();
-                    bool isValid = false;
+                    bool isValid = true;
                     for(int i = 0; i < modeString.Length; i++)
                     {
                         if (char.IsWhiteSpace(modeString[i]))
@@ -839,10 +839,11 @@ namespace ClemToken
             {
                 if (grammar[i] == '\r')
                 {
-                    if (skipNext && (i + 1 >= grammar.Length || grammar[i + 1] != '\n'))
+                    if (skipNext && i + 1 < grammar.Length && grammar[i + 1] == '\n')
                     {
-                        parts[^1] += '\\';
+                        parts[^1] += "\r\n";
                         skipNext = false;
+                        i++; // skip \n
                     }
                     continue;
                 }
@@ -855,17 +856,24 @@ namespace ClemToken
                     skipNext = false;
                     continue;
                 }
-                if (skipNext)
+                if (grammar[i] == '\\')
+                {
+                    if (!skipNext)
+                    {
+                        skipNext = true;
+                        continue;
+                    }
+                }
+                else if (skipNext)
                 {
                     parts[^1] += '\\';
                     skipNext = false;
                 }
-                if (grammar[i] == '\\')
-                {
-                    skipNext = true;
-                    continue;
-                }
                 parts[^1] += grammar[i];
+            }
+            if (skipNext)
+            {
+                parts[^1] += '\\';
             }
             return [.. parts];
         }

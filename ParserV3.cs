@@ -23,16 +23,20 @@ class SpecStore
         Checker checker;
         if (_specs.TryGetValue(name, out var spec))
         {
-            if (spec.Mode == "simple")
-                checker = new SimpleChecker(spec.Definition);
-            else // default to regex
-                checker = new RegexChecker(spec.Definition);
+            checker = GenerateChecker(spec);
         }
         else
             checker = new RegexChecker(defaultPattern);
         _checkerCache[name] = checker;
         Console.WriteLine($"Spec '{name}' resolved to regex: {checker}");
         return checker;
+    }
+    public static Checker GenerateChecker(Spec spec)
+    {
+        if (spec.Mode == "simple")
+            return new SimpleChecker(spec.Definition);
+        else // default to regex
+            return new RegexChecker(spec.Definition);
     }
 }
 
@@ -41,8 +45,12 @@ abstract class Checker
     public abstract bool IsMatch(string text);
     public abstract bool IsMatch(Span<char> text);
     public abstract bool IsMatch(ReadOnlySpan<char> text);
+    public abstract bool ContainsMatch(string text);
     public abstract bool FullMatch(string text);
-
+    public abstract int GetMatch(string text);
+    public abstract int GetMatch(Span<char> text);
+    public abstract int GetMatch(ReadOnlySpan<char> text);
+    public abstract int GetMatchLength(string text);
 }
 
 class RegexChecker(string regexString): Checker
@@ -60,9 +68,31 @@ class RegexChecker(string regexString): Checker
     {
         return _regex.IsMatch(text);
     }
+
+    public override bool ContainsMatch(string text) => IsMatch(text);
     public override bool FullMatch(string text)
     {
         return _regex.FullMatch(text);
+    }
+    public override int GetMatch(string text)
+    {
+        var match = _regex.Match(text);
+        return match.Success ? match.Index : -1;
+    }
+    public override int GetMatch(Span<char> text)
+    {
+        var match = _regex.Match(text.ToString());
+        return match.Success ? match.Index : -1;
+    }
+    public override int GetMatch(ReadOnlySpan<char> text)
+    {
+        var match = _regex.Match(text.ToString());
+        return match.Success ? match.Index : -1;
+    }
+    public override int GetMatchLength(string text)
+    {
+        var match = _regex.Match(text);
+        return match.Success ? match.Length : -1;
     }
 }
 
@@ -70,13 +100,13 @@ class SimpleChecker(string checkString): Checker
 {
     public override bool IsMatch(string text)
     {
-        return text.Contains(checkString);
+        return text.StartsWith(checkString);
     }
     public override bool IsMatch(Span<char> text)
     {
         if (text.Length < checkString.Length)
             return false;
-        for(int i = 0; i <= checkString.Length; i++)
+        for(int i = 0; i < checkString.Length; i++)
         {
             if (text[i] != checkString[i])
                 return false;
@@ -87,16 +117,64 @@ class SimpleChecker(string checkString): Checker
     {
         if (text.Length < checkString.Length)
             return false;
-        for(int i = 0; i <= checkString.Length; i++)
+        for(int i = 0; i < checkString.Length; i++)
         {
             if (text[i] != checkString[i])
                 return false;
         }
         return true;
     }
+    public override bool ContainsMatch(string text)
+    {
+        return text.Contains(checkString);
+    }
     public override bool FullMatch(string text)
     {
         return text == checkString;
+    }
+    public override int GetMatch(string text)
+    {
+        return text.IndexOf(checkString);
+    }
+    public override int GetMatch(Span<char> text)
+    {
+        for (int i = 0; i < text.Length - checkString.Length; i++)
+        {
+            bool match = true;
+            for (int j = 0; j < checkString.Length; j++)
+            {
+                if (text[i + j] != checkString[j])
+                {
+                    match = false;
+                    break;
+                }
+            }
+            if (match)
+                return i;
+        }
+        return -1;
+    }
+    public override int GetMatch(ReadOnlySpan<char> text)
+    {
+        for (int i = 0; i < text.Length - checkString.Length; i++)
+        {
+            bool match = true;
+            for (int j = 0; j < checkString.Length; j++)
+            {
+                if (text[i + j] != checkString[j])
+                {
+                    match = false;
+                    break;
+                }
+            }
+            if (match)
+                return i;
+        }
+        return -1;
+    }
+    public override int GetMatchLength(string text)
+    {
+        return checkString.Length;
     }
 }
 
@@ -112,12 +190,138 @@ class ParserV3
         SpecStore specStore = new SpecStore();
         foreach (var spec in specs)
         {
+            if (spec.Target == "comment" || spec.Target == "comment_begin" || spec.Target == "comment_end" || spec.Target == "comment_escape")
+            {
+                continue; // skip comment specs
+            }
             specStore.AddSpec(spec);
         }
         Console.WriteLine("--------------------------------------------------");
         Console.WriteLine(Serializer.DisplayRules(rules));
         Console.WriteLine("--------------------------------------------------");
-        return Parse(code, rules, specStore, referenceStore);
+        string cleanedCode = CleanSource(specs, code);
+        return Parse(cleanedCode, rules, specStore, referenceStore);
+    }
+    static string CleanSource(Spec[] specs, string code)
+    {
+        // replace comment content with spaces, to keep line/column positions & lengths
+        List<Checker> commentCheckers = [..specs.Where(s => s.Target == "comment").Select(s => SpecStore.GenerateChecker(s))];
+        List<Checker> beginCheckers = [..specs.Where(s => s.Target == "comment_begin").Select(s => SpecStore.GenerateChecker(s))];
+        List<Checker> endCheckers = [..specs.Where(s => s.Target == "comment_end").Select(s => SpecStore.GenerateChecker(s))];
+        List<Checker> escapeCheckers = [..specs.Where(s => s.Target == "comment_escape").Select(s => SpecStore.GenerateChecker(s))];
+        char[] result = [..code];
+        for (int i = 0; i < result.Length; i++)
+        {
+            while (i < result.Length && (result[i] == '\r' || result[i] == '\n'))
+            {
+                i++; // skip newlines
+            }
+            Checker? earliestMatcher = null;
+            int earliestIndex = result.Length - i;
+            bool lineMatch = false;
+            foreach(var checker in commentCheckers)
+            {
+                var span = result.AsSpan(i);
+                if (checker.IsMatch(span))
+                {
+                    int commentStart = checker.GetMatch(span);
+                    if (commentStart >= earliestIndex)
+                    {
+                        continue;
+                    }
+                    if (SearchForEscape(result[i..(i + commentStart)], escapeCheckers))
+                    {
+                        continue; // skip this match, it's escaped
+                    }
+                    earliestMatcher = checker;
+                    earliestIndex = commentStart;
+                    lineMatch = true;
+                }
+            }
+            int newLineIndex = result.AsSpan(i).IndexOfAny(['\r', '\n']);
+            if (newLineIndex == -1)
+                newLineIndex = result.Length - i;
+            newLineIndex += i;
+            foreach(var checker in beginCheckers)
+            {
+                var match = new string(result[i..newLineIndex]);
+                if (checker is RegexChecker)
+                {
+                    throw new Exception("In the grammar it's a simple?");
+                }
+                if (checker.ContainsMatch(match))
+                {
+                    int beginMatch = checker.GetMatch(match);
+                    if (beginMatch >= earliestIndex)
+                    {
+                        continue;
+                    }
+                    if (SearchForEscape(result[i..(i + beginMatch)], escapeCheckers))
+                    {
+                        continue; // skip this match, it's escaped
+                    }
+                    earliestMatcher = checker;
+                    earliestIndex = beginMatch;
+                    lineMatch = false;
+                }
+            }
+            if (earliestMatcher != null)
+            {
+                if (lineMatch)
+                {
+                    for(int j = i + earliestIndex; j < newLineIndex; j++)
+                    {
+                        result[j] = ' ';
+                    }
+                    i = newLineIndex;
+                    continue;
+                }
+                // multiline
+                int k = i + earliestIndex;
+                Checker? earliestEndChecker = null;
+                string rest = new string(result[k..]);
+                int earliestEndIndex = rest.Length;
+                foreach(var checker in endCheckers)
+                {
+                    if (checker.ContainsMatch(rest))
+                    {
+                        int endMatch = checker.GetMatch(rest);
+                        if (endMatch >= earliestEndIndex)
+                        {
+                            continue;
+                        }
+                        if (SearchForEscape(result[k..(k + endMatch)], escapeCheckers))
+                        {
+                            continue; // skip this match, it's escaped
+                        }
+                        earliestEndChecker = checker;
+                        earliestEndIndex = endMatch;
+                    }
+                }
+                int limit = earliestEndChecker != null ? k + earliestEndIndex + earliestEndChecker.GetMatchLength(rest) : result.Length;
+                for (; k < limit; k++)
+                {
+                    result[k] = ' ';
+                }
+                i = limit;
+            }
+        }
+        return new string(result);
+    }
+    static bool SearchForEscape(char[] text, List<Checker> escapeCheckers)
+    {
+        foreach (var checker in escapeCheckers)
+        {
+            for (int i = 0; i < text.Length; i++)
+            {
+                var span = text.AsSpan(i);
+                if (checker.IsMatch(span))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
     static Tree ExpandLastNode(Tree target, string code, int by = 1)
     {

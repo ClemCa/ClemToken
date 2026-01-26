@@ -389,3 +389,133 @@ var example = () => {
         )
     )
 )
+```
+// commented test
+import test from testy;
+```
+(
+    Name: Root
+    (
+        Name: statement
+        Value: import test from testy;
+        (
+            Name: import
+            Value: import test from testy
+            (
+                Name: import
+                Value: import
+            )
+            (
+                Name: identifier
+                Value: test
+                (
+                    Name: name
+                    Value: test
+                )
+            )
+            (
+                Name: from
+                Value: from
+            )
+            (
+                Name: identifier
+                Value: testy
+                (
+                    Name: name
+                    Value: testy
+                )
+            )
+        )
+        (
+            Name: ;
+            Value: ;
+        )
+    )
+)
+```
+import test from testy; /// another comment
+```
+(
+    Name: Root
+    (
+        Name: statement
+        Value: import test from testy;
+        (
+            Name: import
+            Value: import test from testy
+            (
+                Name: import
+                Value: import
+            )
+            (
+                Name: identifier
+                Value: test
+                (
+                    Name: name
+                    Value: test
+                )
+            )
+            (
+                Name: from
+                Value: from
+            )
+            (
+                Name: identifier
+                Value: testy
+                (
+                    Name: name
+                    Value: testy
+                )
+            )
+        )
+        (
+            Name: ;
+            Value: ;
+        )
+    )
+)
+```
+/* multiline comment
+that works
+really well */
+import test from testy;
+```
+(
+    Name: Root
+    (
+        Name: statement
+        Value: import test from testy;
+        (
+            Name: import
+            Value: import test from testy
+            (
+                Name: import
+                Value: import
+            )
+            (
+                Name: identifier
+                Value: test
+                (
+                    Name: name
+                    Value: test
+                )
+            )
+            (
+                Name: from
+                Value: from
+            )
+            (
+                Name: identifier
+                Value: testy
+                (
+                    Name: name
+                    Value: testy
+                )
+            )
+        )
+        (
+            Name: ;
+            Value: ;
+        )
+    )
+)

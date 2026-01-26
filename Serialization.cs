@@ -110,7 +110,7 @@ namespace ClemToken
             ByteBuffer specBytesBuffer = new(writeMode: true);
             foreach (var spec in specs)
             {
-                Console.WriteLine($"Serializing spec for target '{spec.Target}'");
+                Console.WriteLine($"Serializing spec for target '{spec.Target}' (mode: '{spec.Mode}')");
                 _ = MirrorSpec(spec, specBytesBuffer);
             }
             int specBytes = specBytesBuffer.GetAllBytes().Length;
