@@ -192,13 +192,14 @@ namespace ClemToken
                             Ignored = true;
                             suffix = suffix[1..];
                             goto redo;
-                        } else if (int.TryParse(suffix, out start))
+                        }
+                        else if (int.TryParse(suffix, out start))
                         {
                             end = start;
                             break;
                         }
-                        else 
-                        throw new Exception("Invalid suffix: " + suffix + " for: " + Name);
+                        else
+                            throw new Exception($"Invalid suffix: {suffix} for {Name}, prefix: {prefix} ({prefix?.Length}), value: {value} ({value?.Length})");
                 }
             }
             Repeat = (start, end);
@@ -302,7 +303,7 @@ namespace ClemToken
                     rules.Add(rule);
                 }
             }
-            return ([..rules], [..specs]);
+            return ([.. rules], [.. specs]);
         }
 
         private static bool ParseSpec(string line, out Spec spec)
@@ -458,7 +459,7 @@ namespace ClemToken
                 }
                 else
                 {
-                    Console.WriteLine("Found group: " + token.Item2.Name+ $" {token.Item2.Repeat}");
+                    Console.WriteLine("Found group: " + token.Item2.Name + $" {token.Item2.Repeat}");
                     if (root == null)
                     {
                         root = token.Item2;
@@ -501,7 +502,7 @@ namespace ClemToken
                     cursor = i + 1;
                 }
             }
-            if(cursor != text.Length)
+            if (cursor != text.Length)
             {
                 parts.Add(text[cursor..]); // add the last part
             }
@@ -568,12 +569,12 @@ namespace ClemToken
                         }
                         if (tk is Optional)
                         {
-                            int closingBracket = PairedIndex(text, '[', ']', i+1, startState: 1);
+                            int closingBracket = PairedIndex(text, '[', ']', i + 1, startState: 1);
                             if (closingBracket == -1)
                             {
                                 throw new Exception("Unmatched opening bracket in optional: " + text[i..text.Length]);
                             }
-                            tk = ExploreOptional(text[(i+1)..closingBracket]);
+                            tk = ExploreOptional(text[(i + 1)..closingBracket]);
                         }
                         if (tk is Anchor)
                         {
@@ -590,7 +591,7 @@ namespace ClemToken
         private static Rule ExploreOptional(string text)
         {
             var optional = new Optional();
-            optional.Value = "["+text+"]";
+            optional.Value = "[" + text + "]";
             string[] split = PairedSplit(text, " | ", '[', ']');
             List<Rule> options = new List<Rule>();
             foreach (var part in split)
@@ -645,10 +646,13 @@ namespace ClemToken
             {
                 var start = token.IndexOf('(');
                 var end = token.LastIndexOf(')');
-                var group = new Group(out bool subgroup, token.Substring(start + 1, end - start - 1), token.Substring(0, start), token.Substring(end + 1));
-                if (subgroup)
+                if (end > start)
                 {
-                    return (subgroup, group);
+                    var group = new Group(out bool subgroup, token.Substring(start + 1, end - start - 1), token[..start], token[(end + 1)..]);
+                    if (subgroup)
+                    {
+                        return (subgroup, group);
+                    }
                 }
             }
             if (token.StartsWith('@') && token.Length > 1)
@@ -680,16 +684,32 @@ namespace ClemToken
                 return (false, "", "", "", false);
             }
             var prefix = match.Groups["prefix"].Success ? match.Groups["prefix"].Value : "";
+            if (char.IsWhiteSpace(text[prefix.Length]))
+            {
+                return (false, "", "", "", false);
+            }
             var end = text.IndexOf('(');
+            if (end+1 >= text.Length || char.IsWhiteSpace(text[end + 1]))
+            {
+                return (false, "", "", "", false);
+            }
             var stack = 0;
             for (; end < text.Length; end++)
             {
                 if (text[end] == '(')
                 {
+                    if (end + 1 >= text.Length || char.IsWhiteSpace(text[end + 1]))
+                    {
+                        continue;
+                    }
                     stack++;
                 }
                 if (text[end] == ')')
                 {
+                    if (char.IsWhiteSpace(text[end - 1]))
+                    {
+                        continue;
+                    }
                     stack--;
                 }
                 if (stack == 0)
@@ -699,7 +719,7 @@ namespace ClemToken
             }
             if (end == text.Length)
             {
-                end = text.Length - 1;
+                return (false, "", "", "", false);
             }
             var postfix = end + 1;
             for (; postfix < text.Length; postfix++)
@@ -714,47 +734,6 @@ namespace ClemToken
             var subgroup = regex.IsMatch(text[substart..end]);
             var subline = text[substart..end];
             return (true, subline, prefix, suffix, subgroup);
-            // INVALID: (test)
-            // _(test)
-            // (test)+
-            // (test)1-2
-            // (tes(te_:st))+
-            // testy:(test)
-            // super_test:(test)
-            // testy:(test)_
-            // testy:_(test)_
-            // \((?:[^:\+\*\-()]|\([^()]*\))*\)
-            //^(([^\(\):\+\*\-__?]+:|_)\([^:\+\*\-]+\))$
-            //^(\([^:\+\*\-]+\)(\+|\*|\d+(?:-\d+)?|_))
-            //^([^\(\):\+\*\-]+:_?|_)\((?:[^:\+\*\-()]|\([^()]*\))*\)(\+|\*|\d+(?:-\d+)?|_)?$
-            //^([^\(\):\+\*\-]+:_?|_)\((?:[^:\+\*\-()]|\([^()]*\))*\)(\+|\*|\d+(?:-\d+)?|_)?|\((?:[^:\+\*\-()]|\([^()]*\))*\)(\+|\*|\d+(?:-\d+)?|_)$
-            //^(?<prefix>[^\(\):\+\*\-]+:_?|_)(?<token>\((?:[^:\+\*\-()]|\([^()]*\))*\))(\+|\*|\d+(?:-\d+)?|_)?|(?<token_suff>\((?:[^:\+\*\-()]|\([^()]*\))*\))(?<suffix>\+|\*|\d+(?:-\d+)?|_)
-
-            //^(?<prefix>[^\(\):\+\*\-]+:_?|_)(?<token>\((?:[^:\+\*\-()]|\([^()]*\))*\))(?<suffix>\+|\*|\d+(?:-\d+)?|_)?|(?<token_suff>\((?:[^:\+\*\-()]|\([^()]*\))*\))(?<solo_suffix>\+|\*|\d+(?:-\d+)?|_)
-            //^(?:(?<prefix>[^\(\):\+\*\-]+:_?|_)(?<token>\((?:[^:\+\*\-()]|\([^()]*\))*\))(?<suffix>\+|\*|\d+(?:-\d+)?|_)?|(?<token_suff>\((?:[^:\+\*\-()]|\([^()]*\))*\))(?<solo_suffix>\+|\*|\d+(?:-\d+)?|_))
-            /*
-            (
-                ^(?<prefix>[^\(\):\+\*\-]+:_?|_)
-                (?<token>\(
-                    (?:
-                        [^:\+\*\-()]
-                        |
-                        (?<subgroup>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?)
-                    )*
-                    \)
-                )
-                (?<suffix>\+|\*|\d+(?:-\d+)?|_|:)?
-                | (?<token_suff>\(
-                    (?:
-                        [^:\+\*\-()]
-                        |
-                        (?<subgroup_suff>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?)
-                    )
-                    *\)
-                )
-                (?<solo_suffix>\+|\*|\d+(?:-\d+)?|_|:)
-            )
-            */
         }
 
         private static string[] Split(string grammar)
@@ -800,7 +779,7 @@ namespace ClemToken
             return text[..index] + replace + text[(index + search.Length)..];
         }
 
-        [GeneratedRegex(@"^(?:(?<prefix>[^\[\(\):\+\*\-\s]+:_?|_)(?<token>\((?:[^:\+\*\-()]|(?<subgroup>(?:[^\(\):\+\*\-]+:_?|_)?\(.*\):?(?:\+|\*|\d+(?:-\d+)?|_|:)?))*\))(?<suffix>:?(?:\+|\*|\d+(?:-\d+)?|_|:))?|(?<token_suff>\((?:[^:\+\*\-()]|(?<subgroup_suff>:?(?:[^\(\):\+\*\-]+:_?|_)?\(.*\)(?:\+|\*|\d+(?:-\d+)?|_|:)?))*\))(?<solo_suffix>:?(?:\+|\*|\d+(?:-\d+)?|_|:)))")]
+        [GeneratedRegex(@"^(?:(?<prefix>[^\[\(\):\+\*\-\s]+:_?|_)(?<token>\((?:(?<subgroup>(?:[^\[\(\):\+\*\-\s]+:_?|_)?\( .* \):?(?:\+|\?|\*|\d+(?:-\d+)?|_|:))|.)*\))(?<suffix>:?(?:\+|\?|\*|\d+(?:-\d+)?|_|:)?))|^(?:(?<post_token>\((?:(?<subgroup_post>(?:[^\[\(\):\+\*\-\s]+:_?|_)?\( .* \):?(?:\+|\?|\*|\d+(?:-\d+)?|_|:))|.)*\))(?<solo_suffix>:?(?:\+|\?|\*|\d+(?:-\d+)?|_|:)))")]
         private static partial Regex GroupRegex();
     }
 }
