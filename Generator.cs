@@ -294,7 +294,7 @@ namespace ClemToken
             {
                 if (ParseSpec(part, out Spec spec))
                 {
-                    Console.WriteLine("Found spec: " + spec.Target+ " (mode: "+(spec.Mode == "" ? "default" : spec.Mode)+")" + " = " + spec.Definition);
+                    Logger.Log("Found spec: " + spec.Target+ " (mode: "+(spec.Mode == "" ? "default" : spec.Mode)+")" + " = " + spec.Definition);
                     specs.Add(spec);
                     continue;
                 }
@@ -378,7 +378,7 @@ namespace ClemToken
                 {
                     throw new Exception("Rule cannot have more than one anchor: " + anchor);
                 }
-                Console.WriteLine("Found anchor: " + anchor);
+                Logger.Log("Found anchor: " + anchor);
                 root = new Anchor(anchor);
                 var result = ParseLine(line[(anchor.Length + 1)..], true);
                 if (result is Anchor tmp)
@@ -413,11 +413,11 @@ namespace ClemToken
                     }
                     if (tk.IsReserved)
                     {
-                        Console.WriteLine("Found reserved token: " + acc);
+                        Logger.Log("Found reserved token: " + acc);
                     }
                     else if (tk is Reference)
                     {
-                        Console.WriteLine("Found reference: " + acc);
+                        Logger.Log("Found reference: " + acc);
                     }
                     else if (tk is Anchor)
                     {
@@ -432,11 +432,11 @@ namespace ClemToken
                         }
                         tk = ExploreOptional(line[(i - acc.Length + 1)..closingBracket]);
                         i = closingBracket + 1;
-                        Console.WriteLine("Found optional: " + tk.Value);
+                        Logger.Log("Found optional: " + tk.Value);
                     }
                     else
                     {
-                        Console.WriteLine("Found token: " + acc);
+                        Logger.Log("Found token: " + acc);
                     }
                     if (root == null)
                     {
@@ -468,7 +468,7 @@ namespace ClemToken
                     {
                         throw new Exception("Cannot have a subgroup as the first token of a rule: " + line[(i - ver.Item2.Length - ver.Item3.Length - ver.Item4.Length)..]);
                     }
-                    Console.WriteLine("Found subgroup: " + token.Item2.Name + $" ({token.Item2.Value})");
+                    Logger.Log("Found subgroup: " + token.Item2.Name + $" ({token.Item2.Value})");
                     if (root.Children.Length > 0)
                     {
                         root.Children[^1].Children = [.. root.Children[^1].Children, token.Item2];
@@ -480,7 +480,7 @@ namespace ClemToken
                 }
                 else
                 {
-                    Console.WriteLine("Found group: " + token.Item2.Name + $" {token.Item2.Repeat}");
+                    Logger.Log("Found group: " + token.Item2.Name + $" {token.Item2.Repeat}");
                     if (root == null)
                     {
                         root = token.Item2;
@@ -572,7 +572,7 @@ namespace ClemToken
                     var search = VerifyGroup(text[i..]);
                     if (search.Item1)
                     {
-                        Console.WriteLine($"Found subgroup: {search.Item2}");
+                        Logger.Log($"Found subgroup: {search.Item2}");
                         var (subgroup, token) = GroupToToken(search.Item2, search.Item3, search.Item4);
                         if (subgroup)
                         {
@@ -622,7 +622,7 @@ namespace ClemToken
                         {
                             throw new Exception("Anchors are not authorized in subgroups: " + text[i..]);
                         }
-                        Console.WriteLine("Found token: " + tk.Name);
+                        Logger.Log("Found token: " + tk.Name);
                         i += tk.Value?.Length ?? tk.Name.Length;
                         rules.Add(tk);
                     }

@@ -57,6 +57,7 @@
         static void Main(string[] args)
         {
             Console.WriteLine("ClemToken");
+            Logger.Mode = Logger.LogMode.Error;
             if (args.Length < 2)
             {
                 Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in | Tokenizer [-testG] <input> | Tokenizer [-testP] <input> <grammar>");
@@ -89,18 +90,14 @@
                     }
                     string output = args[3];
                     string grammar = File.ReadAllText(file);
-                    var consoleOut = Console.Out;
-                    // Console.SetOut(TextWriter.Null); // turn console off to avoid cluttering the output
                     var (result, specs) = Generator.Generate(grammar);
                     if (args[2] == "-O")
                     {
                         var text = Serializer.DisplayRules(result);
-                        Console.SetOut(consoleOut); // turn console back on
                         File.WriteAllText(output, text);
                         return;
                     }
                     var bytes = Serializer.Serialize(result, specs);
-                    Console.SetOut(consoleOut); // turn console back on
                     File.WriteAllBytes(output, bytes);
                     return;
                 }
@@ -137,16 +134,14 @@
                             Console.WriteLine("Usage: Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in");
                             return;
                     }
-                    var consoleOut = Console.Out;
-                    Console.SetOut(TextWriter.Null); // turn console off to avoid cluttering the output
                     var (rules, specs) = Serializer.Deserialize(File.ReadAllBytes(file));
-                    var writer = new StringWriter();
                     Tree result;
-                    Console.SetOut(writer);
                     Console.WriteLine("Parsing...");
                     Console.WriteLine("Specs: " + specs.Length);
                     Console.WriteLine("Rules: " + rules.Length);
                     Console.WriteLine("Text: " + text);
+                    string log_out = "";
+                    Logger.RawOutput += (log) => { log_out += log + "\n"; };
                     foreach (var rule in rules)
                     {
                         Console.WriteLine($" - {rule.Name}");
@@ -154,17 +149,15 @@
                     try
                     {
                         result = ParserV3.Parse(text, rules, specs);
-                        File.WriteAllText("parse_log.txt", writer.ToString());
+                        File.WriteAllText("parse_log.txt", log_out);
                     }
                     catch (Exception e)
                     {
                         Console.WriteLine("Error during parsing: " + e.Message);
                         Console.WriteLine(e.StackTrace);
-                        Console.SetOut(consoleOut);
-                        Console.Write("Logs:\n" + writer.ToString());
+                        Console.Write("Logs:\n" + log_out);
                         return;
                     }
-                    Console.SetOut(consoleOut);
                     string output = Serializer.StringSerializeTree(result);
                     Console.Write(output); // output to stdout, the user can redirect it to a file or use it in their program
                 }

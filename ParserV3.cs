@@ -28,7 +28,7 @@ class SpecStore
         else
             checker = new RegexChecker(defaultPattern);
         _checkerCache[name] = checker;
-        Console.WriteLine($"Spec '{name}' resolved to regex: {checker}");
+        Logger.Log($"Spec '{name}' resolved to regex: {checker}");
         return checker;
     }
     public static Checker GenerateChecker(Spec spec)
@@ -196,9 +196,9 @@ class ParserV3
             }
             specStore.AddSpec(spec);
         }
-        Console.WriteLine("--------------------------------------------------");
-        Console.WriteLine(Serializer.DisplayRules(rules));
-        Console.WriteLine("--------------------------------------------------");
+        Logger.Log("--------------------------------------------------");
+        Logger.Log(Serializer.DisplayRules(rules));
+        Logger.Log("--------------------------------------------------");
         string cleanedCode = CleanSource(specs, code);
         return Parse(cleanedCode, rules, specStore, referenceStore);
     }
@@ -361,10 +361,6 @@ class ParserV3
         }
         return [.. newChildren.Select(CleanIgnored)];
     }
-    private static void LogAt(string message, int depth)
-    {
-        Console.WriteLine(new string(' ', depth * 2) + message.Replace("\r\n", "\\n").Replace("\n", "\\n"));
-    }
     public static Tree Parse(string code, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore)
     {
         var tree = new Tree(new Token("Root", "", 0, 0, false), []);
@@ -440,10 +436,10 @@ class ParserV3
                 }
             }
         }
-        Console.WriteLine($"Completed parsing at cursor {cursor}/{code.Length}");
+        Logger.Log($"Completed parsing at cursor {cursor}/{code.Length}");
         var addressedTree = WithCoordinates(tree);
         addressedTree = CleanIgnored(addressedTree);
-        // LogAt($"Parsed tree: {Serializer.StringSerializeTree(addressedTree)}", depth);
+        // Logger.Log($"Parsed tree: {Serializer.StringSerializeTree(addressedTree)}", depth);
         return addressedTree;
     }
 
@@ -455,14 +451,14 @@ class ParserV3
         {
             if (Check(code, cursor, 0, rule, specStore, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit))
             {
-                Console.WriteLine($"Matched rule {rule} {rule.Name} at cursor: {cursor} size: {cursor - ruleCursor}");
+                Logger.Log($"Matched rule {rule} {rule.Name} at cursor: {cursor} size: {cursor - ruleCursor}");
                 newCursor = ruleCursor;
                 foundTree = ruleTree;
                 return true;
             }
             else
             {
-                Console.WriteLine($"Failed to match rule {rule} {rule.Name} at cursor: {cursor}");
+                Logger.Log($"Failed to match rule {rule} {rule.Name} at cursor: {cursor}");
             }
         }
         expandLimit = 0;
@@ -482,7 +478,7 @@ class ParserV3
                 {
                     return true; // Anchor matched but no tree created
                 }
-                LogAt($"Anchor matched: {target.Name} at cursor {startCursor} ({ruleTree.Value.Token.Value}) | ({code[startCursor..Math.Min(startCursor + 5, code.Length)]})", depth);
+                Logger.Log($"Anchor matched: {target.Name} at cursor {startCursor} ({ruleTree.Value.Token.Value}) | ({code[startCursor..Math.Min(startCursor + 5, code.Length)]})", depth);
                 var rt = ruleTree.Value;
                 rt.Token.Name = target.Name;
                 ruleTree = rt;
@@ -501,7 +497,7 @@ class ParserV3
                 }
                 return NonGroupChildrenCheck(anchor, cursor, expandAllowed, out newCursor, out ruleTree, out expandLimit);
             case Optional optional:
-                LogAt("> " + optional.Name + " (" + optional.Value + ")", depth);
+                Logger.Log("> " + optional.Name + " (" + optional.Value + ")", depth);
                 var tempGroup = new Group((1, 1), false) // workaround to reuse the expansion code
                 {
                     Children = [optional.Children[0]]
@@ -512,13 +508,13 @@ class ParserV3
                     tempGroup.Children[0] = optional.Children[i]; // only child set here to avoid reallocation
                     if (SingleGroupCheck(code, cursor, expandAllowed, tempGroup, specStore, referenceStore, out newCursor, out var singleRuleTree, out expandLimit, depth + 1))
                     {
-                        LogAt($"Optional matched: {optional.Name} ({optional.Value}) at cursor {cursor}, for {optional.Children[i].Name} ({optional.Children[i].Value}): ({singleRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                        Logger.Log($"Optional matched: {optional.Name} ({optional.Value}) at cursor {cursor}, for {optional.Children[i].Name} ({optional.Children[i].Value}): ({singleRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                         ruleTree = singleRuleTree?.Children[0] ?? null; // unwrap the group
                         return true;
                     }
                     else
                     {
-                        LogAt($"Optional not matched: {optional.Name} ({optional.Value}) at cursor {cursor} | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                        Logger.Log($"Optional not matched: {optional.Name} ({optional.Value}) at cursor {cursor} | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                     }
                 }
                 ruleTree = null;
@@ -535,7 +531,7 @@ class ParserV3
                         if (expandAllowed > 0)
                         {
                             bool res = Check(code, cursor + 1, expandAllowed - 1, simple, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth + 1);
-                            LogAt($"Simple expanded: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                            Logger.Log($"Simple expanded: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                             return res;
                         }
                         ruleTree = null; // No match for simple rule
@@ -550,7 +546,7 @@ class ParserV3
                     rt.Token.Line = cursor;
                     ruleTree = rt;
                 }
-                LogAt($"Simple matched: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                Logger.Log($"Simple matched: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                 return ngSuccess;
             case Reserved reserved:
                 if (reserved.Children.Length > 0)
@@ -586,7 +582,7 @@ class ParserV3
                             }
                             expandLimit = Math.Max(0, maxCursor - newCursor);
                         }
-                        Console.WriteLine($"Name regex match: {nameRgx} against '{code[cursor..(newCursor + expandLimit)]}' with expand limit {expandLimit}");
+                        Logger.Log($"Name regex match: {nameRgx} against '{code[cursor..(newCursor + expandLimit)]}' with expand limit {expandLimit}");
                         return true;
                     case "greedy": // like a name, but once it latches on it expands to the end of the file
                         if (char.IsWhiteSpace(code[cursor]))
@@ -639,7 +635,7 @@ class ParserV3
                 var referenceRule = referenceStore.GetReference(reference.Name);
                 if (referenceRule.Name == "lambda")
                 {
-                    LogAt($"{referenceRule.Name} start", depth);
+                    Logger.Log($"{referenceRule.Name} start", depth);
                 }
                 Tree? ruleOutput;
                 bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, depth + 1);
@@ -654,7 +650,7 @@ class ParserV3
                     val.Token.Name = reference.Value;
                     ruleOutput = val;
                 }
-                LogAt($"{referenceRule.Name}{(ruleOutput != null && ruleOutput.Value.Token.Name != referenceRule.Name ? $" ({ruleOutput.Value.Token.Name})" : "")} {(success ? "matched" : "not matched")} at cursor {cursor}->{newCursor}", depth);
+                Logger.Log($"{referenceRule.Name}{(ruleOutput != null && ruleOutput.Value.Token.Name != referenceRule.Name ? $" ({ruleOutput.Value.Token.Name})" : "")} {(success ? "matched" : "not matched")} at cursor {cursor}->{newCursor}", depth);
                 ruleTree = ruleOutput;
                 return success;
             default:
@@ -713,7 +709,7 @@ class ParserV3
 
     static bool SingleGroupCheck(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth) // no repetition, just the children
     {
-        LogAt($">> {group.Name} ({group.Value})", depth);
+        Logger.Log($">> {group.Name} ({group.Value})", depth);
         newCursor = cursor; // always at the latest validated place
         int targetCursor = newCursor; // can creep forward to check against whitespace
         bool previousWasExpandable = false;
@@ -730,7 +726,7 @@ class ParserV3
         for (int i = 0; i < group.Children.Length; i++)
         {
             var child = group.Children[i];
-            LogAt($">? {child.Name} ({child.Value})", depth);
+            Logger.Log($">? {child.Name} ({child.Value})", depth);
             if (!Check(code, targetCursor, 0, child, specStore, referenceStore, out int childCursor, out Tree? childTree, out int childExpandLimit, depth + 1))
             {
                 if (targetCursor >= code.Length)
@@ -740,7 +736,7 @@ class ParserV3
                 }
                 if (char.IsWhiteSpace(code[targetCursor]))
                 {
-                    LogAt($"Match not found, but whitespace found, trying to expand with {children.Count} children ({code[(targetCursor + 1)..Math.Min(targetCursor + 10, code.Length)]})", depth);
+                    Logger.Log($"Match not found, but whitespace found, trying to expand with {children.Count} children ({code[(targetCursor + 1)..Math.Min(targetCursor + 10, code.Length)]})", depth);
                     whitespaceExpansion++;
                     previousWasExpandable = previousWasExpandable && (whitespaceExpansion + expanded) < previousExpandLimit;
                     expandAllowed = Math.Max(expandAllowed - 1, 0);
@@ -754,7 +750,7 @@ class ParserV3
                 }
                 else if (expandAllowed > 0)
                 {
-                    LogAt($"Match not found, but expand allowed, trying to expand ({code[(targetCursor + 1)..Math.Min(targetCursor + 10, code.Length)]})", depth);
+                    Logger.Log($"Match not found, but expand allowed, trying to expand ({code[(targetCursor + 1)..Math.Min(targetCursor + 10, code.Length)]})", depth);
                     whitespaceExpansion++; // this will count as whitespace for the purposes of our program
                     expandAllowed--;
                     i--;
@@ -764,7 +760,7 @@ class ParserV3
                 }
                 else if (previousWasExpandable && expanded < previousExpandLimit) // would be false anyway if whitespace expansion made it overflow
                 {
-                    LogAt($"Match not found, but previous child was expandable, trying to expand to {expanded + 1} ({code[(targetCursor + 1)..Math.Min(targetCursor + 10, code.Length)]})", depth);
+                    Logger.Log($"Match not found, but previous child was expandable, trying to expand to {expanded + 1} ({code[(targetCursor + 1)..Math.Min(targetCursor + 10, code.Length)]})", depth);
                     if (whitespaceExpansion > 0)
                     {
                         expanded += whitespaceExpansion;
@@ -809,7 +805,7 @@ class ParserV3
                     cursor = childCursor - childTree.Value.Token.Value.Length;
                     // set the cursor to the start of the first child, so we accidentally get the space or waste it skipped
                 }
-                LogAt($"Child found: {childTree.Value.Token.Name} ({childTree.Value.Token.Value}), cursor: {targetCursor}->{childCursor} expandable: {previousWasExpandable}, expand limit: {childExpandLimit}, null expansion: {nullExpansionT1 + nullExpansionT2 + nullExpansionT3}", depth);
+                Logger.Log($"Child found: {childTree.Value.Token.Name} ({childTree.Value.Token.Value}), cursor: {targetCursor}->{childCursor} expandable: {previousWasExpandable}, expand limit: {childExpandLimit}, null expansion: {nullExpansionT1 + nullExpansionT2 + nullExpansionT3}", depth);
             }
             else if (childExpandLimit > 0)
             {
@@ -819,7 +815,7 @@ class ParserV3
             {
                 if (expandAllowed > 0)
                 {
-                    LogAt($"Null expansion type 1", depth);
+                    Logger.Log($"Null expansion type 1", depth);
                     expandAllowed--;
                     i--;
                     targetCursor++;
@@ -828,7 +824,7 @@ class ParserV3
                 }
                 else if (previousWasExpandable && expanded < previousExpandLimit)
                 {
-                    LogAt($"Null expansion type 2", depth);
+                    Logger.Log($"Null expansion type 2", depth);
                     expanded++;
                     nullExpansionT2++;
                     i--;
@@ -837,7 +833,7 @@ class ParserV3
                 }
                 else if (i != 0 && targetCursor < code.Length && char.IsWhiteSpace(code[targetCursor]))
                 {
-                    LogAt($"Null expansion type 3", depth);
+                    Logger.Log($"Null expansion type 3", depth);
                     i--;
                     targetCursor++;
                     nullExpansionT3++;
@@ -845,7 +841,7 @@ class ParserV3
                 }
                 if (nullExpansionT1 > 0 || nullExpansionT2 > 0 || nullExpansionT3 > 0)
                 {
-                    LogAt($"Resetting null expansions", depth);
+                    Logger.Log($"Resetting null expansions", depth);
                     // reset
                     expandAllowed += nullExpansionT1;
                     expanded -= nullExpansionT2;
@@ -863,8 +859,8 @@ class ParserV3
             expandLimit = previousExpandLimit;
         }
         ruleTree = new Tree(new Token(group.Name, code[cursor..newCursor], cursor, 0, group.Ignored), children);
-        LogAt($"Group matched: {group.Name} ({group.Value}) at cursor {cursor}->{newCursor}: ({ruleTree.Value.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
-        LogAt($"Rule:\n{Serializer.DisplayRules([group])}", depth);
+        Logger.Log($"Group matched: {group.Name} ({group.Value}) at cursor {cursor}->{newCursor}: ({ruleTree.Value.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+        Logger.Log($"Rule:\n{Serializer.DisplayRules([group])}", depth);
         return true; // All children matched
     }
 }

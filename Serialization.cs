@@ -110,19 +110,19 @@ namespace ClemToken
             ByteBuffer specBytesBuffer = new(writeMode: true);
             foreach (var spec in specs)
             {
-                Console.WriteLine($"Serializing spec for target '{spec.Target}' (mode: '{spec.Mode}')");
+                Logger.Log($"Serializing spec for target '{spec.Target}' (mode: '{spec.Mode}')");
                 _ = MirrorSpec(spec, specBytesBuffer);
             }
             int specBytes = specBytesBuffer.GetAllBytes().Length;
             Mirror(specBytes, bytes);
             bytes.Add(specBytesBuffer.GetAllBytes());
-            Console.WriteLine($"Serialized {specs.Length} specs.");
+            Logger.Log($"Serialized {specs.Length} specs.");
             for (int i = 0; i < rules.Length; i++)
             {
-                Console.WriteLine($"Serializing rule {i + 1} of {rules.Length}");
+                Logger.Log($"Serializing rule {i + 1} of {rules.Length}");
                 _ = MirrorRule(rules[i], bytes);
             }
-            Console.WriteLine($"Serialized {rules.Length} rules.");
+            Logger.Log($"Serialized {rules.Length} rules.");
             return bytes.GetAllBytes();
         }
         public static (Rule[] rules, Spec[] specs) Deserialize(byte[] data)
@@ -145,13 +145,13 @@ namespace ClemToken
             {
                 specs.Add(MirrorSpec(new Spec(), specBuffer));
             }
-            Console.WriteLine("All specs deserialized.");
+            Logger.Log("All specs deserialized.");
             while (!bytes.Complete)
             {
-                Console.WriteLine($"Rule {rules.Count + 1}");
+                Logger.Log($"Rule {rules.Count + 1}");
                 rules.Add(MirrorRule(new ProcessRule(), bytes));
             }
-            Console.WriteLine("All rules deserialized.");
+            Logger.Log("All rules deserialized.");
             return ([.. rules], [.. specs]);
         }
         public static Spec MirrorSpec(Spec spec, ByteBuffer bytes)
