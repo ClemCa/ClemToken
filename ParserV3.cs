@@ -200,7 +200,18 @@ class ParserV3
         Logger.Log(Serializer.DisplayRules(rules));
         Logger.Log("--------------------------------------------------");
         string cleanedCode = CleanSource(specs, code);
-        return Parse(cleanedCode, rules, specStore, referenceStore);
+        Stack<Rule> searchStack = new();
+        try {
+            return Parse(cleanedCode, rules, specStore, referenceStore, searchStack);
+        } catch(StackOverflowException)
+        {
+            Logger.Error("Stack overflow during parsing. Possible infinite recursion in grammar rules. Search stack:\n" + string.Join(" -> ", searchStack.Select(r => r.Name)));
+            throw;
+        } catch (Exception)
+        {
+            Logger.Error("Exception during parsing. Search stack:\n" + string.Join(" -> ", searchStack.Select(r => r.Name)));
+            throw;
+        }
     }
     static string CleanSource(Spec[] specs, string code)
     {
@@ -361,7 +372,7 @@ class ParserV3
         }
         return [.. newChildren.Select(CleanIgnored)];
     }
-    public static Tree Parse(string code, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore)
+    public static Tree Parse(string code, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, Stack<Rule> searchStack)
     {
         var tree = new Tree(new Token("Root", "", 0, 0, false), []);
         int cursor = 0;
@@ -404,7 +415,7 @@ class ParserV3
                 cursor++;
                 continue;
             }
-            if (Match(code, cursor, rules, specStore, referenceStore, out Tree? foundTree, out int newCursor, out int matchExpandLimit))
+            if (Match(code, cursor, rules, specStore, referenceStore, out Tree? foundTree, out int newCursor, out int matchExpandLimit, searchStack))
             {
                 cursor = newCursor;
                 expandLimit = matchExpandLimit;
@@ -444,20 +455,23 @@ class ParserV3
     }
 
 
-    static bool Match(string code, int cursor, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, out Tree? foundTree, out int newCursor, out int expandLimit)
+    static bool Match(string code, int cursor, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, out Tree? foundTree, out int newCursor, out int expandLimit, Stack<Rule> searchStack)
     {
         newCursor = cursor; // No match found, return the original cursor
         foreach (var rule in rules)
         {
-            if (Check(code, cursor, 0, rule, specStore, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit))
+            searchStack.Push(rule);
+            if (Check(code, cursor, 0, rule, specStore, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit, searchStack))
             {
                 Logger.Log($"Matched rule {rule} {rule.Name} at cursor: {cursor} size: {cursor - ruleCursor}");
                 newCursor = ruleCursor;
                 foundTree = ruleTree;
+                searchStack.Pop();
                 return true;
             }
             else
             {
+                searchStack.Pop();
                 Logger.Log($"Failed to match rule {rule} {rule.Name} at cursor: {cursor}");
             }
         }
@@ -466,13 +480,13 @@ class ParserV3
         return false; // No match found
     }
 
-    static bool Check(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth = 0)
+    static bool Check(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, Stack<Rule> searchStack, int depth = 0)
     {
         newCursor = cursor;
         expandLimit = 0;
-        bool NonGroupChildrenCheck(Rule target, int startCursor, int expandAllowed, out int newCursor, out Tree? ruleTree, out int expandLimit)
+        bool NonGroupChildrenCheck(Rule target, int startCursor, int expandAllowed, out int newCursor, out Tree? ruleTree, out int expandLimit, Stack<Rule> searchStack)
         {
-            if (SingleGroupCheck(code, startCursor, expandAllowed, new Group((1, 1), target.Name, false, target.Children), specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth + 1))
+            if (SingleGroupCheck(code, startCursor, expandAllowed, new Group((1, 1), target.Name, false, target.Children), specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth + 1, searchStack))
             {
                 if (ruleTree == null)
                 {
@@ -495,7 +509,7 @@ class ParserV3
                     ruleTree = null;
                     return true;
                 }
-                return NonGroupChildrenCheck(anchor, cursor, expandAllowed, out newCursor, out ruleTree, out expandLimit);
+                return NonGroupChildrenCheck(anchor, cursor, expandAllowed, out newCursor, out ruleTree, out expandLimit, searchStack);
             case Optional optional:
                 Logger.Log("> " + optional.Name + " (" + optional.Value + ")", depth);
                 var tempGroup = new Group((1, 1), false) // workaround to reuse the expansion code
@@ -506,7 +520,7 @@ class ParserV3
                 {
                     tempGroup.Name = optional.Name + "_" + i;
                     tempGroup.Children[0] = optional.Children[i]; // only child set here to avoid reallocation
-                    if (SingleGroupCheck(code, cursor, expandAllowed, tempGroup, specStore, referenceStore, out newCursor, out var singleRuleTree, out expandLimit, depth + 1))
+                    if (SingleGroupCheck(code, cursor, expandAllowed, tempGroup, specStore, referenceStore, out newCursor, out var singleRuleTree, out expandLimit, depth + 1, searchStack))
                     {
                         Logger.Log($"Optional matched: {optional.Name} ({optional.Value}) at cursor {cursor}, for {optional.Children[i].Name} ({optional.Children[i].Value}): ({singleRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                         ruleTree = singleRuleTree?.Children[0] ?? null; // unwrap the group
@@ -530,7 +544,9 @@ class ParserV3
                     {
                         if (expandAllowed > 0)
                         {
-                            bool res = Check(code, cursor + 1, expandAllowed - 1, simple, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth + 1);
+                            searchStack.Push(simple);
+                            bool res = Check(code, cursor + 1, expandAllowed - 1, simple, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, searchStack, depth + 1);
+                            searchStack.Pop();
                             Logger.Log($"Simple expanded: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                             return res;
                         }
@@ -538,7 +554,7 @@ class ParserV3
                         return false;
                     }
                 }
-                bool ngSuccess = NonGroupChildrenCheck(simple, cursor + simple.Value.Length, 0, out newCursor, out ruleTree, out expandLimit);
+                bool ngSuccess = NonGroupChildrenCheck(simple, cursor + simple.Value.Length, 0, out newCursor, out ruleTree, out expandLimit, searchStack);
                 if (ngSuccess && ruleTree.HasValue)
                 {
                     var rt = ruleTree.Value;
@@ -626,7 +642,7 @@ class ParserV3
                         throw new NotSupportedException($"Reserved rule '{reserved.Name}' is not supported. If it's a custom spec, make sure it is defined.");
                 }
             case Group group:
-                return CheckGroup(code, cursor, expandAllowed, group, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth);
+                return CheckGroup(code, cursor, expandAllowed, group, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth, searchStack);
             case Reference reference:
                 if (reference.Children.Length > 0)
                 {
@@ -638,7 +654,9 @@ class ParserV3
                     Logger.Log($"{referenceRule.Name} start", depth);
                 }
                 Tree? ruleOutput;
-                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, depth + 1);
+                searchStack.Push(referenceRule);
+                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, searchStack, depth + 1);
+                searchStack.Pop();
                 if (!success && reference.Repeat.Item1 == 0)
                 {
                     success = true;
@@ -657,7 +675,7 @@ class ParserV3
                 throw new NotSupportedException($"Rule type {rule.GetType().Name} is not supported.");
         }
     }
-    static bool CheckGroup(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth)
+    static bool CheckGroup(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth, Stack<Rule> searchStack)
     {
         newCursor = cursor;
         expandLimit = 0;
@@ -671,7 +689,7 @@ class ParserV3
         List<Tree> children = [];
         for (int i = 0; newCursor < code.Length && (i < group.Repeat.Item2 || group.Repeat.Item2 == -1); i++)
         {
-            if (!SingleGroupCheck(code, newCursor, i == 0 ? expandAllowed : 0, group, specStore, referenceStore, out int iterationCursor, out Tree? groupTree, out int groupExpandLimit, depth))
+            if (!SingleGroupCheck(code, newCursor, i == 0 ? expandAllowed : 0, group, specStore, referenceStore, out int iterationCursor, out Tree? groupTree, out int groupExpandLimit, depth, searchStack))
             {
                 if (i < group.Repeat.Item1) // If we haven't matched the minimum required repetitions
                 {
@@ -707,7 +725,7 @@ class ParserV3
         return true;
     }
 
-    static bool SingleGroupCheck(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth) // no repetition, just the children
+    static bool SingleGroupCheck(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth, Stack<Rule> searchStack) // no repetition, just the children
     {
         Logger.Log($">> {group.Name} ({group.Value})", depth);
         newCursor = cursor; // always at the latest validated place
@@ -727,8 +745,10 @@ class ParserV3
         {
             var child = group.Children[i];
             Logger.Log($">? {child.Name} ({child.Value})", depth);
-            if (!Check(code, targetCursor, 0, child, specStore, referenceStore, out int childCursor, out Tree? childTree, out int childExpandLimit, depth + 1))
+            searchStack.Push(child);
+            if (!Check(code, targetCursor, 0, child, specStore, referenceStore, out int childCursor, out Tree? childTree, out int childExpandLimit, searchStack, depth + 1))
             {
+                searchStack.Pop();
                 if (targetCursor >= code.Length)
                 {
                     newCursor = targetCursor; // No more characters to check
@@ -781,6 +801,7 @@ class ParserV3
                 }
                 return false; // Child rule did not match
             }
+            searchStack.Pop();
             if (childTree != null)
             {
                 whitespaceExpansion = 0;
