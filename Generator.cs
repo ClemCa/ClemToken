@@ -108,6 +108,24 @@ namespace ClemToken
             Children = options ?? [];
         }
     }
+    struct Lookahead : Rule
+    {
+        public (int, int) Repeat { get; set; }
+        public string Name { get; set; }
+        public string? Value { get; set; }
+        public bool Ignored { get; set; }
+        public Rule[] Children { get; set; }
+        public bool IsReserved { get; set; }
+        public Lookahead(string value)
+        {
+            Name = "Lookahead";
+            Value = value;
+            Repeat = (1, 1);
+            Ignored = false;
+            Children = [];
+            IsReserved = false;
+        }
+    }
     struct Group : Rule
     {
         public (int, int) Repeat { get; set; }
@@ -696,6 +714,14 @@ namespace ClemToken
                         return (subgroup, group);
                     }
                 }
+            }
+            if (token.StartsWith("@>"))
+            {
+                if (token.Length == 2)
+                {
+                    throw new Exception("Lookahead token cannot be empty: " + token);
+                }
+                return (false, new Lookahead(token[2..]));
             }
             if (token.StartsWith('@') && token.Length > 1)
             {

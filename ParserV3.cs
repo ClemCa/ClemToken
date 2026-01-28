@@ -694,6 +694,18 @@ class ParserV3
                 Logger.Log($"{referenceRule.Name}{(ruleOutput != null && ruleOutput.Value.Token.Name != referenceRule.Name ? $" ({ruleOutput.Value.Token.Name})" : "")} {(success ? "matched" : "not matched")} at cursor {cursor}->{newCursor}", depth);
                 ruleTree = ruleOutput;
                 return success;
+            case Lookahead lookahead:
+                // zero-width rule
+                int endSearch = code.IndexOf('\n', cursor);
+                int foundIndex = code.IndexOf(lookahead.Value!, cursor, endSearch == -1 ? code.Length - cursor : endSearch - cursor);
+                if (foundIndex == cursor)
+                {
+                    ruleTree = null;
+                    expandLimit = expandAllowed;
+                    return true;
+                }
+                ruleTree = null;
+                return false;
             default:
                 throw new NotSupportedException($"Rule type {rule.GetType().Name} is not supported.");
         }

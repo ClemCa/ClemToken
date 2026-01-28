@@ -14,7 +14,8 @@ namespace ClemToken
         //! 6: optionals
         //! 7: specs
         //! 8: mode in specs & named/optional references
-        private const int Version = 8;
+        //! 9: lookaheads
+        private const int Version = 9;
         public static string StringSerializeTree(Tree tree)
         {
             StringBuilder sb = new();
@@ -171,6 +172,7 @@ namespace ClemToken
                 Reference => 3,
                 Anchor => 4,
                 Optional => 5,
+                Lookahead => 6,
                 _ => -1
             };
             type = Mirror(type, bytes);
@@ -216,6 +218,11 @@ namespace ClemToken
                     Optional o = rule is Optional optional ? optional : new();
                     rule = o;
                     goto children; // optional does not have extra data
+                case 6:
+                    Lookahead l = rule is Lookahead lookahead ? lookahead : new();
+                    l.Value = Mirror(l.Value ?? "", bytes);
+                    rule = l;
+                    goto children; // lookahead does not have extra data
                 default:
                     throw new Exception($"Unknown rule type: {rule.GetType().Name} ({type})");
             }
