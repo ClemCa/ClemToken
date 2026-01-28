@@ -457,29 +457,40 @@ class ParserV3
 
     class AntiCompute()
     {
-        private List<int> cursors = [];
-        private Dictionary<int, HashSet<Rule>> _cursorRules = new();
+        private Dictionary<int, Dictionary<Rule, int>> _cursorRules = new();
 
         public bool Studying(Rule rule, int cursor)
         {
-            if (_cursorRules.TryGetValue(cursor, out var rulesAtCursor) && rulesAtCursor.Contains(rule))
+            if (_cursorRules.TryGetValue(cursor, out var rulesAtCursor) && rulesAtCursor.ContainsKey(rule) && rulesAtCursor[rule] > 100)
             {
                 return false; // that possibility has already been studied
             }
-            cursors.Add(cursor);
             if (!_cursorRules.ContainsKey(cursor))
             {
-                _cursorRules[cursor] = [];
+                _cursorRules[cursor] = new Dictionary<Rule, int>();
             }
-            _cursorRules[cursor].Add(rule);
+            if (!_cursorRules[cursor].ContainsKey(rule))
+            {
+                _cursorRules[cursor].Add(rule, 1);
+            }
+            else
+            {
+                _cursorRules[cursor][rule]++;
+            }
             return true;
         }
-        public void Finished(int cursor)
+        public void Finished(Rule rule, int cursor)
         {
-            cursors.Remove(cursor);
-            if (!cursors.Contains(cursor))
+            if (!_cursorRules.ContainsKey(cursor)) return;
+            if (!_cursorRules[cursor].ContainsKey(rule)) return;
+            _cursorRules[cursor][rule]--;
+            if (_cursorRules[cursor][rule] <= 0)
             {
-                _cursorRules.Remove(cursor); // cleanup
+                _cursorRules[cursor].Remove(rule);
+            }
+            if (_cursorRules[cursor].Count == 0)
+            {
+                _cursorRules.Remove(cursor);
             }
         }
     }
@@ -530,7 +541,7 @@ class ParserV3
         }
         bool Cleanup(bool returnValue)
         {
-            antiCompute.Finished(cursor);
+            antiCompute.Finished(rule, cursor);
             return returnValue;
         }
         bool NonGroupChildrenCheck(Rule target, int startCursor, int expandAllowed, out int newCursor, out Tree? ruleTree, out int expandLimit, Stack<Rule> searchStack)
