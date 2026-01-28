@@ -178,7 +178,13 @@ namespace ClemToken
                     case "":
                         break; // already looped
                     default:
-                        if (suffix.Contains('-'))
+                        if (suffix.StartsWith(':')) // no-op
+                        {
+                            Ignored = true;
+                            suffix = suffix[1..];
+                            goto redo;
+                        }
+                        else if (suffix.Contains('-'))
                         {
                             string[] parts = suffix.Split('-');
                             if (int.TryParse(parts[0], out start) && int.TryParse(parts[1], out end))
@@ -186,12 +192,6 @@ namespace ClemToken
                                 break;
                             }
                             throw new Exception("Invalid (int, int): " + suffix);
-                        }
-                        else if (suffix.StartsWith(':'))
-                        {
-                            Ignored = true;
-                            suffix = suffix[1..];
-                            goto redo;
                         }
                         else if (int.TryParse(suffix, out start))
                         {
