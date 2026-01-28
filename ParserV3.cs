@@ -206,11 +206,11 @@ class ParserV3
             return Parse(cleanedCode, rules, specStore, referenceStore, searchStack);
         } catch(StackOverflowException)
         {
-            Logger.Error("Stack overflow during parsing. Possible infinite recursion in grammar rules. Search stack:\n" + string.Join(" -> ", searchStack.Select(r => r.Name)));
+            Logger.Error("Stack overflow during parsing. Possible infinite recursion in grammar rules. Search stack:\n" + string.Join(" -> ", searchStack.Select(r => r.Name).Reverse()));
             throw;
         } catch (Exception)
         {
-            Logger.Error("Exception during parsing. Search stack:\n" + string.Join(" -> ", searchStack.Select(r => r.Name)));
+            Logger.Error("Exception during parsing. Search stack:\n" + string.Join(" -> ", searchStack.Select(r => r.Name).Reverse()));
             throw;
         }
     }
@@ -472,10 +472,10 @@ class ParserV3
             }
             if (Check(code, cursor, 0, rule, specStore, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit, searchStack))
             {
+                searchStack.Pop();
                 Logger.Log($"Matched rule {rule} {rule.Name} at cursor: {cursor} size: {cursor - ruleCursor}");
                 newCursor = ruleCursor;
                 foundTree = ruleTree;
-                searchStack.Pop();
                 return true;
             }
             else
