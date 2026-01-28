@@ -1,4 +1,4 @@
-
+namespace ClemToken;
 public static class Logger
 {
     public static LogMode Mode = LogMode.None;
