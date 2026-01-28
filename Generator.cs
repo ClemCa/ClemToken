@@ -501,7 +501,15 @@ namespace ClemToken
                     Logger.Log("Found group: " + token.Item2.Name + $" {token.Item2.Repeat}");
                     if (root == null)
                     {
-                        root = token.Item2;
+                        if (inAnchor)
+                        {
+                            root = new Anchor // intermediary to be extracted above
+                            {
+                                Children = [token.Item2]
+                            };
+                        }
+                        else
+                            root = token.Item2;
                     }
                     else
                     {

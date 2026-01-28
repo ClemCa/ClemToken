@@ -524,6 +524,7 @@ class ParserV3
         expandLimit = 0;
         if (!antiCompute.Studying(rule, cursor))
         {
+            Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.", depth);
             ruleTree = null;
             return false; // already studied this rule at this cursor, avoid infinite recursion
         }
@@ -540,7 +541,7 @@ class ParserV3
                 {
                     return true; // Anchor matched but no tree created
                 }
-                Logger.Log($"Anchor matched: {target.Name} at cursor {startCursor} ({ruleTree.Value.Token.Value}) | ({code[startCursor..Math.Min(startCursor + 5, code.Length)]})", depth);
+                Logger.Log($"Anchor matched: {target.Name} at cursor {startCursor} -> +{expandLimit} ({ruleTree.Value.Token.Value}) | ({code[startCursor..Math.Min(startCursor + 5, code.Length)]})", depth);
                 var rt = ruleTree.Value;
                 rt.Token.Name = target.Name;
                 ruleTree = rt;
@@ -753,7 +754,7 @@ class ParserV3
     {
         newCursor = cursor;
         expandLimit = 0;
-        int lastExpandLimit = 0;
+        int lastExpandLimit = expandAllowed;
         if (group.Repeat.Item1 == 0 && group.Repeat.Item2 == 0)
         {
             ruleTree = null;
@@ -763,11 +764,10 @@ class ParserV3
         List<Tree> children = [];
         for (int i = 0; newCursor < code.Length && (i < group.Repeat.Item2 || group.Repeat.Item2 == -1); i++)
         {
-            if (!SingleGroupCheck(code, newCursor, i == 0 ? expandAllowed : 0, group, specStore, referenceStore, out int iterationCursor, out Tree? groupTree, out int groupExpandLimit, depth, searchStack, antiCompute))
+            if (!SingleGroupCheck(code, newCursor, lastExpandLimit, group, specStore, referenceStore, out int iterationCursor, out Tree? groupTree, out int groupExpandLimit, depth, searchStack, antiCompute))
             {
                 if (i < group.Repeat.Item1) // If we haven't matched the minimum required repetitions
                 {
-                    expandLimit = 0;
                     ruleTree = null; // Not enough repetitions matched
                     return false; // Not enough repetitions matched
                 }
@@ -815,6 +815,9 @@ class ParserV3
         int nullExpansionT1 = 0;
         int nullExpansionT2 = 0;
         int nullExpansionT3 = 0;
+        (int cursor,  int targetCursor, int newCursor, bool previousWasExpandable, int expanded, int expandIndex, int previousExpandLimit, int whitespaceExpansion, int nullExpansionT1, int nullExpansionT2, int nullExpansionT3) lastValid = (
+            cursor, targetCursor, newCursor, previousWasExpandable, expanded, expandIndex, previousExpandLimit, whitespaceExpansion, nullExpansionT1, nullExpansionT2, nullExpansionT3
+        );
         for (int i = 0; i < group.Children.Length; i++)
         {
             var child = group.Children[i];
@@ -832,6 +835,7 @@ class ParserV3
                 searchStack.Pop();
                 if (targetCursor >= code.Length)
                 {
+                    Logger.Log($"Failed to match {child.Name} ({child.Value}), end of code reached", depth);
                     newCursor = targetCursor; // No more characters to check
                     return false; // Child rule did not match
                 }
@@ -872,12 +876,11 @@ class ParserV3
                     targetCursor++;
                     continue; // If the previous child was expandable, try expanding and checking the same child again
                 }
-                targetCursor = newCursor; // reset so the next child is checked against the original cursor if optional
                 if (child is Group childGroup && childGroup.Repeat.Item1 == 0) // optional children can be skipped
                 {
-                    //! Modified
-                    // Keep expandable tail from previous matches so nested groups/optionals can still expand.
-                    // Skipping an optional child should not clear expandability of the last matched rule.
+                    Logger.Log($"Skipping optional child: {child.Name} ({child.Value})", depth);
+                    // reset values to previous child / starting value
+                    (cursor, targetCursor, newCursor, previousWasExpandable, expanded, expandIndex, previousExpandLimit, whitespaceExpansion, nullExpansionT1, nullExpansionT2, nullExpansionT3) = lastValid;
                     continue;
                 }
                 return false; // Child rule did not match
@@ -952,16 +955,20 @@ class ParserV3
                     nullExpansionT2 = 0;
                     nullExpansionT3 = 0;
                 }
+                Logger.Log($"Child found: {child.Name} ({child.Value}), cursor: {targetCursor}->{childCursor} expandable: {previousWasExpandable}, expand limit: {childExpandLimit}, null expansion: {nullExpansionT1 + nullExpansionT2 + nullExpansionT3}", depth);
             }
             newCursor = childCursor;
             targetCursor = childCursor;
+            lastValid = (
+                cursor, targetCursor, newCursor, previousWasExpandable, expanded, expandIndex, previousExpandLimit, whitespaceExpansion, nullExpansionT1, nullExpansionT2, nullExpansionT3
+            );
         }
         if (previousWasExpandable)
         {
             expandLimit = previousExpandLimit;
         }
         ruleTree = new Tree(new Token(group.Name, code[cursor..newCursor], cursor, 0, group.Ignored), children);
-        Logger.Log($"Group matched: {group.Name} ({group.Value}) at cursor {cursor}->{newCursor}: ({ruleTree.Value.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+        Logger.Log($"Group matched: {group.Name} ({group.Value}) at cursor {cursor}->{newCursor} (+{expandLimit}): ({ruleTree.Value.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
         Logger.Log($"Rule:\n{Serializer.DisplayRules([group])}", depth);
         return true; // All children matched
     }

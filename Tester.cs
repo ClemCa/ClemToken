@@ -111,29 +111,25 @@ namespace ClemToken
             }
             var text = File.ReadAllText(file);
             int test = 0;
-            var consoleOut = Console.Out;
-            StringWriter writer = new();
+            string generate_log = "";
+            Logger.RawOutput += (msg) => { generate_log += msg + "\n"; };
             while (!string.IsNullOrWhiteSpace(text))
             {
                 test++;
                 var (line, tree) = GetPair(ref text);
-                Console.Out.Flush();
-                Console.SetOut(writer); // write to string instead of console
                 var start = DateTime.Now;
                 var generatedTree = Generator.Generate(line).rules[0];
                 try
                 {
                     DetailedComparison(generatedTree, tree);
-                    Console.SetOut(consoleOut); // turn console back on
                     Console.WriteLine($"Test {test} passed in {(DateTime.Now - start).TotalMilliseconds}ms");
                 }
                 catch (Exception e)
                 {
-                    Console.SetOut(consoleOut); // turn console back on
                     Console.WriteLine($"Test {test} failed: {e.Message}");
                 }
             }
-            File.WriteAllText("generate_log.txt", writer.ToString());
+            File.WriteAllText("generate_log.txt", generate_log);
         }
 
         static void DetailedComparison(Rule rule, TestingTree tree, int step = 0)

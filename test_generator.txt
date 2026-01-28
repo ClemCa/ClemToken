@@ -263,3 +263,37 @@ import @identifier _(. @identifier)* from @identifier ;
         )
     )
 )
+@test: 1 2 3
+(
+    Name: test
+    Value: @test:
+    (
+        Name: 1
+        Value: 1
+    )
+    (
+        Name: 2
+        Value: 2
+    )
+    (
+        Name: 3
+        Value: 3
+    )
+)
+@identifier: escape:(~)? $[name]
+(
+    Name: identifier
+    Value: @identifier:
+    (
+        Name: escape
+        Repeat: 0 1
+        (
+            Name: ~
+            Value: ~
+        )
+    )
+    (
+        Name: name
+        Value: $[name]
+    )
+)
