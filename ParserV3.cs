@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
 namespace ClemToken;
@@ -461,6 +462,14 @@ class ParserV3
         foreach (var rule in rules)
         {
             searchStack.Push(rule);
+            // check if current call stack is near stack overflow
+            try
+            {
+                RuntimeHelpers.EnsureSufficientExecutionStack();
+            } catch (InsufficientExecutionStackException)
+            {
+                throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
+            }
             if (Check(code, cursor, 0, rule, specStore, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit, searchStack))
             {
                 Logger.Log($"Matched rule {rule} {rule.Name} at cursor: {cursor} size: {cursor - ruleCursor}");
@@ -545,6 +554,13 @@ class ParserV3
                         if (expandAllowed > 0)
                         {
                             searchStack.Push(simple);
+                            try
+                            {
+                                RuntimeHelpers.EnsureSufficientExecutionStack();
+                            } catch (InsufficientExecutionStackException)
+                            {
+                                throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
+                            }
                             bool res = Check(code, cursor + 1, expandAllowed - 1, simple, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, searchStack, depth + 1);
                             searchStack.Pop();
                             Logger.Log($"Simple expanded: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
@@ -655,6 +671,13 @@ class ParserV3
                 }
                 Tree? ruleOutput;
                 searchStack.Push(referenceRule);
+                try
+                {
+                    RuntimeHelpers.EnsureSufficientExecutionStack();
+                } catch (InsufficientExecutionStackException)
+                {
+                    throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
+                }
                 bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, searchStack, depth + 1);
                 searchStack.Pop();
                 if (!success && reference.Repeat.Item1 == 0)
@@ -746,6 +769,13 @@ class ParserV3
             var child = group.Children[i];
             Logger.Log($">? {child.Name} ({child.Value})", depth);
             searchStack.Push(child);
+            try
+            {
+                RuntimeHelpers.EnsureSufficientExecutionStack();
+            } catch (InsufficientExecutionStackException)
+            {
+                throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
+            }
             if (!Check(code, targetCursor, 0, child, specStore, referenceStore, out int childCursor, out Tree? childTree, out int childExpandLimit, searchStack, depth + 1))
             {
                 searchStack.Pop();
