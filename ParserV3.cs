@@ -617,6 +617,15 @@ class ParserV3
                 }
                 switch (reserved.Name)
                 {
+                    case "space":
+                        if (code[cursor] == ' ')
+                        {
+                            newCursor = cursor + 1;
+                            ruleTree = new Tree(new Token("space", code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
+                            return Cleanup(true);
+                        }
+                        ruleTree = null;
+                        return Cleanup(false);
                     case "name":
                         if (char.IsWhiteSpace(code[cursor]))
                         {
