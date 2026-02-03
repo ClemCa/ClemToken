@@ -232,7 +232,7 @@ namespace ClemToken
                         l.Children ??= new Rule[optionalChildren];
                         for (int i = 0; i < optionalChildren; i++)
                         {
-                            string mirroredText = Mirror(l.Children[i].Value ?? "", bytes);
+                            string mirroredText = Mirror(l.Children[i]?.Value ?? "", bytes);
                             l.Children[i] = new Simple() { Value = mirroredText };
                         }
                     }

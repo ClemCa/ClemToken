@@ -6,10 +6,12 @@ echo (B)oth
 echo (W)riting
 echo (R)eading
 echo (F)ull Pipeline in production (Generator + Writing + Reading + Parser), outputs test_full_pipeline.txt
+echo (L)oad
+echo (S)Sharp Grammar
 
 set ESC=
 SET "mySeq=<   >%ESC%[1D%ESC%[1D%ESC%[1D%ESC%[1D"
-choice /c GPBWRF /n /m "%mySeq%"
+choice /c GPBWRFLS /n /m "%mySeq%"
 set choice=%errorlevel%
 if %choice%==1 (
     echo Running Generator test...
@@ -32,6 +34,13 @@ if %choice%==1 (
     dotnet run -p:StartupObject=ClemToken.Program -- -f test_grammar.ct -O test_generated_raw.txt
     dotnet run -p:StartupObject=ClemToken.Program -- -f test_grammar.ct -o test_generated.at
     dotnet run -p:StartupObject=ClemToken.Program -- -f test_generated.at -i test_code.txt > test_full_pipeline.cta
+) else if %choice%==7 (
+    echo Running Preload test...
+    dotnet run -p:StartupObject=ClemToken.Program -- -f test_generated.at -preload
+) else if %choice%==8 (
+    echo Running CSharp Grammar test...
+    dotnet run -p:StartupObject=ClemToken.Program -- -f "C:\Users\cleme\Documents\SSharp\ClemToken\grammar.ct" -o test_ssharp_generated.at
+    dotnet run -p:StartupObject=ClemToken.Program -- -f test_ssharp_generated.at -preload
 ) else if %choice%==0 (
     exit
 )

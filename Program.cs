@@ -81,6 +81,17 @@
             if (args[0] == "-f")
             {
                 string file = args[1];
+                if (args[2] == "-preload")
+                {
+                    if (args.Length != 3)
+                    {
+                        Console.WriteLine("Usage: Tokenizer -f <grammar> -preload");
+                        return;
+                    }
+                    Utils.PreloadGrammar(file);
+                    Console.WriteLine("Grammar preloaded.");
+                    return;
+                }
                 if (args[2] == "-o" || args[2] == "-O")
                 {
                     if (args.Length != 4)
