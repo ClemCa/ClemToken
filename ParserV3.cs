@@ -618,6 +618,7 @@ class ParserV3
                 };
                 for (int i = 0; i < optional.Children.Length; i++)
                 {
+                    //! for now optionals are always ignored, so .Ignored might be serialized and be a feature (:) but isn't used by the parser
                     tempGroup.Name = optional.Name + "_" + i;
                     tempGroup.Children[0] = optional.Children[i]; // only child set here to avoid reallocation
                     if (SingleGroupCheck(code, cursor, expandAllowed, tempGroup, specStore, referenceStore, out newCursor, out var singleRuleTree, out expandLimit, depth + 1, searchStack, antiCompute))

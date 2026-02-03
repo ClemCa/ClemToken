@@ -17,7 +17,8 @@ namespace ClemToken
         //! 9: lookaheads
         //! 10: ignored anchors
         //! 11: lookaheads with sub optionals
-        private const int Version = 11;
+        //! 12: ignored optionals
+        private const int Version = 12;
         public static string StringSerializeTree(Tree tree)
         {
             StringBuilder sb = new();
@@ -220,6 +221,7 @@ namespace ClemToken
                 case 5:
                     Optional o = rule is Optional optional ? optional : new();
                     rule = o;
+                    o.Ignored = Mirror(o.Ignored, bytes);
                     goto children; // optional does not have extra data
                 case 6:
                     Lookahead l = rule is Lookahead lookahead ? lookahead : new();

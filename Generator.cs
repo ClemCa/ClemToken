@@ -464,6 +464,11 @@ namespace ClemToken
                         }
                         tk = ExploreOptional(line[(i - acc.Length + 1)..closingBracket]);
                         i = closingBracket + 1;
+                        if (i < line.Length && line[i] == ':')
+                        {
+                            tk.Ignored = true;
+                            i++;
+                        }
                         Logger.Log("Found optional: " + tk.Value);
                     }
                     else if (tk is Lookahead lk && lk.Optional)
@@ -678,6 +683,11 @@ namespace ClemToken
                                 throw new Exception("Unmatched opening bracket in optional: " + text[i..text.Length]);
                             }
                             tk = ExploreOptional(text[(i + 1)..closingBracket]);
+                            if (closingBracket + 1 < text.Length && text[closingBracket + 1] == ':')
+                            {
+                                tk.Ignored = true;
+                                i++;
+                            }
                         }
                         if (tk is Reference)
                         {
