@@ -677,7 +677,7 @@ namespace ClemToken
                             int j = i + 4;
                             while (j < text.Length)
                             {
-                                if (text[j] == ']' && !char.IsWhiteSpace(text[j - 1]) && text[j - 1] != '\\')
+                                if (text[j] == ']' && text[j - 1] != '\\')
                                 {
                                     closingBracket = j;
                                     break;
@@ -732,7 +732,7 @@ namespace ClemToken
             List<Rule> options = new List<Rule>();
             foreach (var part in split)
             {
-                options.Add(new Simple(part));
+                options.Add(new Simple(part.Replace("\\]", "]")));
             }
             lookahead.Children = [.. options];
             return lookahead;
