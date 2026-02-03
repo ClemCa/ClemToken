@@ -193,6 +193,8 @@ namespace ClemToken
         }
         public Token Current()
         {
+            if (Tree.Children.Count == 0)
+                return Tree.Token;
             return Tree.Children[status].Token;
         }
         public Tree CurrentTree()

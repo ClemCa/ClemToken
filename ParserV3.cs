@@ -463,6 +463,28 @@ class ParserV3
         {
             if (searchStack.Contains((rule, cursor)))
             {
+                var myEntryPoint = searchStack.Last();
+                bool previouslyMet = false;
+                bool foundEntry = false;
+                foreach (var entry in searchStack)
+                {
+                    if (entry.Item2 != cursor)
+                    {
+                        foundEntry = false;
+                        continue;
+                    }
+                    if (foundEntry && entry.Item1 == rule)
+                    {
+                        previouslyMet = true;
+                        break;
+                    }
+                    foundEntry = entry.Item1 == rule;
+                }
+                if (!previouslyMet)
+                {
+                    searchStack.Push((rule, cursor));
+                    return true; // unlikely to be circular, even if we saw this rule at this cursor before, it was in a different context
+                }
                 Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
                 return false;
             }
