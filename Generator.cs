@@ -81,12 +81,16 @@ namespace ClemToken
         public bool IsReserved { get; set; }
         public Anchor(string value, Rule[]? children = null)
         {
+            Ignored = value.EndsWith("?:");
+            if (Ignored)
+            {
+                value = value[..^2] + ":";
+            }
             int start = value.IndexOf('@');
             int end = value.IndexOf(':');
             Name = value.Substring(start + 1, end - start - 1);
             Value = value;
             Repeat = (1, 1);
-            Ignored = false;
             Children = children ?? [];
             IsReserved = false;
         }

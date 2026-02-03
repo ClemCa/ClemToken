@@ -15,7 +15,8 @@ namespace ClemToken
         //! 7: specs
         //! 8: mode in specs & named/optional references
         //! 9: lookaheads
-        private const int Version = 9;
+        //! 10: ignored anchors
+        private const int Version = 10;
         public static string StringSerializeTree(Tree tree)
         {
             StringBuilder sb = new();
@@ -212,6 +213,7 @@ namespace ClemToken
                 case 4:
                     Anchor a = rule is Anchor anchor ? anchor : new();
                     a.Name = Mirror(a.Name, bytes);
+                    a.Ignored = Mirror(a.Ignored, bytes);
                     rule = a;
                     goto children; // anchor does not have extra data
                 case 5:
