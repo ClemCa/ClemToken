@@ -466,7 +466,7 @@ namespace ClemToken
                         int j = i + 4;
                         while (j < line.Length)
                         {
-                            if (line[j] == ']' && !char.IsWhiteSpace(line[j - 1]) && line[j - 1] != '\\')
+                            if (line[j] == ']' && line[j - 1] != '\\')
                             {
                                 closingBracket = j;
                                 break;
