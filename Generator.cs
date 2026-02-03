@@ -321,7 +321,7 @@ namespace ClemToken
             {
                 if (ParseSpec(part, out Spec spec))
                 {
-                    Logger.Log("Found spec: " + spec.Target+ " (mode: "+(spec.Mode == "" ? "default" : spec.Mode)+")" + " = " + spec.Definition);
+                    Logger.Log("Found spec: " + spec.Target + " (mode: " + (spec.Mode == "" ? "default" : spec.Mode) + ")" + " = " + spec.Definition);
                     specs.Add(spec);
                     continue;
                 }
@@ -352,7 +352,7 @@ namespace ClemToken
                 {
                     string modeString = rest[..modeColonIndex].Trim();
                     bool isValid = true;
-                    for(int i = 0; i < modeString.Length; i++)
+                    for (int i = 0; i < modeString.Length; i++)
                     {
                         if (char.IsWhiteSpace(modeString[i]))
                         {
@@ -360,7 +360,8 @@ namespace ClemToken
                             break;
                         }
                     }
-                    if (isValid) {
+                    if (isValid)
+                    {
                         rest = rest[(modeColonIndex + 1)..].Trim();
                         mode = modeString;
                     }
@@ -445,6 +446,10 @@ namespace ClemToken
                     else if (tk is Reference)
                     {
                         Logger.Log("Found reference: " + acc);
+                        if (!tk.Value!.Contains('@'))
+                        {
+                            i += tk.Value.Length + 1;
+                        }
                     }
                     else if (tk is Anchor)
                     {
@@ -460,7 +465,8 @@ namespace ClemToken
                         tk = ExploreOptional(line[(i - acc.Length + 1)..closingBracket]);
                         i = closingBracket + 1;
                         Logger.Log("Found optional: " + tk.Value);
-                    } else if (tk is Lookahead lk && lk.Optional)
+                    }
+                    else if (tk is Lookahead lk && lk.Optional)
                     {
                         int closingBracket = -1;
                         int j = i;
@@ -477,7 +483,7 @@ namespace ClemToken
                         {
                             throw new Exception("Unmatched opening bracket in lookahead: " + line[i..line.Length]);
                         }
-                        tk = ExploreLookahead(line[(i-1)..closingBracket]);
+                        tk = ExploreLookahead(line[(i - 1)..closingBracket]);
                         i = closingBracket + 1;
                     }
                     else
@@ -590,7 +596,7 @@ namespace ClemToken
                 }
                 parts[^1] += text[i];
             }
-            return [..parts];
+            return [.. parts];
         }
         private static int PairedIndex(string text, char open, char close, int start = 0, int startState = 0)
         {
@@ -598,7 +604,8 @@ namespace ClemToken
             bool skipNext = false;
             for (int i = start; i < text.Length; i++)
             {
-                if (!skipNext) {
+                if (!skipNext)
+                {
                     if (text[i] == '\\')
                     {
                         skipNext = true;
@@ -672,6 +679,13 @@ namespace ClemToken
                             }
                             tk = ExploreOptional(text[(i + 1)..closingBracket]);
                         }
+                        if (tk is Reference)
+                        {
+                            if (!tk.Value!.Contains('@'))
+                            {
+                                i += tk.Name.Length + 2;
+                            }
+                        }
                         if (tk is Lookahead lk && lk.Optional)
                         {
                             int closingBracket = -1;
@@ -689,7 +703,7 @@ namespace ClemToken
                             {
                                 throw new Exception("Unmatched opening bracket in lookahead: " + text[i..text.Length]);
                             }
-                            tk = ExploreLookahead(text[(i-1)..closingBracket]);
+                            tk = ExploreLookahead(text[(i - 1)..closingBracket]);
                             i = closingBracket + 1;
                         }
                         if (tk is Anchor)

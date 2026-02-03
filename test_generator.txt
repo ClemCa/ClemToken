@@ -318,3 +318,19 @@ import @identifier _(. @identifier)* from @identifier ;
         )
     )
 )
+@time: (@number unit:@time_unit)+
+(
+    Name: time
+    Value: @time:
+    (
+        Repeat: 1 -1
+        (
+            Name: number
+            Value: @number
+        )
+        (
+            Name: time_unit
+            Value: unit
+        )
+    )
+)
