@@ -201,6 +201,8 @@ class ParserV3
         Logger.Log(Serializer.DisplayRules(rules));
         Logger.Log("--------------------------------------------------");
         string cleanedCode = CleanSource(specs, code);
+        Logger.Log("Cleaned source:\n" + cleanedCode);
+        Logger.Log("--------------------------------------------------");
         Stack<(Rule, int)> searchStack = new();
         try {
             return Parse(cleanedCode, rules, specStore, referenceStore, searchStack);

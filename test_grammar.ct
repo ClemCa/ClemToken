@@ -37,7 +37,7 @@ $comment_escape:simple: \\
 
 ### NUMBERS
 @number: [@integer | @float]
-@integer: ($[digit]):+
+@integer: ($$[digit]):+
 @float: @integer . @integer
 
 

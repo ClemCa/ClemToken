@@ -191,14 +191,17 @@ namespace ClemToken
                         start = 0;
                         end = 1;
                         break;
-                    case "_":
-                        break;
                     case "":
                         break; // already looped
                     default:
-                        if (suffix.StartsWith(':')) // no-op
+                        if (suffix.StartsWith(':')) // ignored
                         {
                             Ignored = true;
+                            suffix = suffix[1..];
+                            goto redo;
+                        }
+                        else if (suffix.StartsWith('_')) // no_op
+                        {
                             suffix = suffix[1..];
                             goto redo;
                         }

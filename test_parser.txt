@@ -519,3 +519,118 @@ import test from testy;
         )
     )
 )
+```
+/*
+multiline comment
+that works
+really well
+
+*/
+import test from testy;
+```
+(
+    Name: Root
+    (
+        Name: statement
+        Value: import test from testy;
+        (
+            Name: import
+            Value: import test from testy
+            (
+                Name: import
+                Value: import
+            )
+            (
+                Name: identifier
+                Value: test
+                (
+                    Name: name
+                    Value: test
+                )
+            )
+            (
+                Name: from
+                Value: from
+            )
+            (
+                Name: identifier
+                Value: testy
+                (
+                    Name: name
+                    Value: testy
+                )
+            )
+        )
+        (
+            Name: ;
+            Value: ;
+        )
+    )
+)
+```
+/*
+import test from cool;
+import another.a as b, c from a;
+
+orange();
+
+var a = 10;
+
+
+b.doSomething();
+
+var b = "hello world";
+
+*/
+myFunc(42);
+```
+(
+    Name: Root
+    (
+        Name: statement
+        Value: myFunc(42);
+        (
+            Name: call
+            Value: myFunc(42)
+            (
+                Name: identifier
+                Value: myFunc
+                (
+                    Name: name
+                    Value: myFunc
+                )
+            )
+            (
+                Name: (
+                Value: (
+            )
+            (
+                Name: arguments
+                Value: 42
+                (
+                    Name: expression
+                    Value: 42
+                    (
+                        Name: literal
+                        Value: 42
+                        (
+                            Name: number
+                            (
+                                Name: integer
+                                Value: 42
+                            )
+                        )
+                    )
+                )
+            )
+            (
+                Name: )
+                Value: )
+            )
+        )
+        (
+            Name: ;
+            Value: ;
+        )
+    )
+)

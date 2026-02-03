@@ -55,32 +55,23 @@ namespace ClemToken
                 throw new Exception("File not found: " + grammar);
             }
             var grammarText = File.ReadAllText(grammar);
-            // turn console off
-            var consoleOut = Console.Out;
-            Console.Out.Flush();
-            Console.SetOut(TextWriter.Null);
             var (rules, specs) = Generator.Generate(grammarText);
-            // turn console back on
-            Console.SetOut(consoleOut);
             var text = File.ReadAllText(file);
             int test = 0;
             StringWriter writer = new();
+            Logger.RawOutput += (msg) => { writer.WriteLine(msg); };
             while (!string.IsNullOrWhiteSpace(text))
             {
                 test++;
                 var (line, tree) = GetPair(ref text);
                 var startTime = DateTime.Now;
                 Tree generatedTree;
-                Console.Out.Flush();
-                Console.SetOut(writer);
                 try
                 {
                     generatedTree = ParserV3.Parse(line, rules, specs);
-                    Console.SetOut(consoleOut);
                 }
                 catch (Exception e)
                 {
-                    Console.SetOut(consoleOut);
                     // string used_grammar = Serializer.DisplayRules(rules);
                     // Console.WriteLine("Used grammar:\n" + used_grammar);
                     Console.WriteLine("Test " + test + " errored: " + e.Message + "\n" + e.StackTrace);
