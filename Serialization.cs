@@ -16,7 +16,8 @@ namespace ClemToken
         //! 8: mode in specs & named/optional references
         //! 9: lookaheads
         //! 10: ignored anchors
-        private const int Version = 10;
+        //! 11: lookaheads with sub optionals
+        private const int Version = 11;
         public static string StringSerializeTree(Tree tree)
         {
             StringBuilder sb = new();
@@ -223,6 +224,18 @@ namespace ClemToken
                 case 6:
                     Lookahead l = rule is Lookahead lookahead ? lookahead : new();
                     l.Value = Mirror(l.Value ?? "", bytes);
+                    l.Optional = Mirror(l.Optional, bytes);
+                    if (l.Optional)
+                    {
+                        int optionalChildren = l.Children?.Length ?? 0;
+                        optionalChildren = Mirror(optionalChildren, bytes);
+                        l.Children ??= new Rule[optionalChildren];
+                        for (int i = 0; i < optionalChildren; i++)
+                        {
+                            string mirroredText = Mirror(l.Children[i].Value ?? "", bytes);
+                            l.Children[i] = new Simple() { Value = mirroredText };
+                        }
+                    }
                     rule = l;
                     goto children; // lookahead does not have extra data
                 default:

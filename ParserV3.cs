@@ -805,7 +805,24 @@ class ParserV3
                 // it's meant for grammar optimization, to avoid extra expensive processing if a simple lookup can disqualify
                 // a rule ahead of time
                 int endSearch = code.IndexOf('\n', cursor);
-                int foundIndex = code.IndexOf(lookahead.Value!, cursor, endSearch == -1 ? code.Length - cursor : endSearch - cursor);
+                int foundIndex;
+                if (lookahead.Optional)
+                {
+                    foundIndex = -1;
+                    foreach(var child in lookahead.Children)
+                    {
+                        if (child.Value == null)
+                        {
+                            continue;
+                        }
+                        foundIndex = code.IndexOf(child.Value, cursor, endSearch == -1 ? code.Length - cursor : endSearch - cursor);
+                        if (foundIndex != -1) break;
+                    }
+                }
+                else
+                {
+                    foundIndex = code.IndexOf(lookahead.Value!, cursor, endSearch == -1 ? code.Length - cursor : endSearch - cursor);
+                }
                 Logger.Log($"> Lookahead {lookahead.Name} ({lookahead.Value}) on {code[cursor..(foundIndex == -1 ? code.Length : foundIndex)]}", depth);
                 if (foundIndex != -1)
                 {

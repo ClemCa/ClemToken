@@ -120,7 +120,8 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
-        public Lookahead(string value)
+        public bool Optional { get; set; }
+        public Lookahead(string value, bool optional = false)
         {
             Name = "Lookahead";
             Value = value;
@@ -128,6 +129,7 @@ namespace ClemToken
             Ignored = false;
             Children = [];
             IsReserved = false;
+            Optional = optional;
         }
     }
     struct Group : Rule
@@ -458,6 +460,24 @@ namespace ClemToken
                         tk = ExploreOptional(line[(i - acc.Length + 1)..closingBracket]);
                         i = closingBracket + 1;
                         Logger.Log("Found optional: " + tk.Value);
+                    } else if (tk is Lookahead lk && lk.Optional)
+                    {
+                        int closingBracket = -1;
+                        int j = i + 4;
+                        while (j < line.Length)
+                        {
+                            if (line[j] == ']' && !char.IsWhiteSpace(line[j - 1]) && line[j - 1] != '\\')
+                            {
+                                closingBracket = j;
+                                break;
+                            }
+                            j++;
+                        }
+                        if (closingBracket == -1)
+                        {
+                            throw new Exception("Unmatched opening bracket in lookahead: " + line[i..line.Length]);
+                        }
+                        tk = ExploreLookahead(line[(i + 4)..closingBracket]);
                     }
                     else
                     {
@@ -651,6 +671,25 @@ namespace ClemToken
                             }
                             tk = ExploreOptional(text[(i + 1)..closingBracket]);
                         }
+                        if (tk is Lookahead lk && lk.Optional)
+                        {
+                            int closingBracket = -1;
+                            int j = i + 4;
+                            while (j < text.Length)
+                            {
+                                if (text[j] == ']' && !char.IsWhiteSpace(text[j - 1]) && text[j - 1] != '\\')
+                                {
+                                    closingBracket = j;
+                                    break;
+                                }
+                                j++;
+                            }
+                            if (closingBracket == -1)
+                            {
+                                throw new Exception("Unmatched opening bracket in lookahead: " + text[i..text.Length]);
+                            }
+                            tk = ExploreLookahead(text[(i + 4)..closingBracket]);
+                        }
                         if (tk is Anchor)
                         {
                             throw new Exception("Anchors are not authorized in subgroups: " + text[i..]);
@@ -684,6 +723,19 @@ namespace ClemToken
             }
             optional.Children = [.. options];
             return optional;
+        }
+        private static Rule ExploreLookahead(string text)
+        {
+            var lookahead = new Lookahead(text, optional: true);
+            lookahead.Value = text;
+            string[] split = text.Split(" | ");
+            List<Rule> options = new List<Rule>();
+            foreach (var part in split)
+            {
+                options.Add(new Simple(part));
+            }
+            lookahead.Children = [.. options];
+            return lookahead;
         }
         private static (bool, Rule) GroupToToken(string value, string prefix, string suffix)
         {
@@ -735,6 +787,10 @@ namespace ClemToken
                 if (token.Length == 2)
                 {
                     throw new Exception("Lookahead token cannot be empty: " + token);
+                }
+                if (token.StartsWith("@>>["))
+                {
+                    return (false, new Lookahead(token[4..], true));
                 }
                 return (false, new Lookahead(token[2..]));
             }
