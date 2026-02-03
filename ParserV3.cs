@@ -463,30 +463,45 @@ class ParserV3
         {
             if (searchStack.Contains((rule, cursor)))
             {
-                var myEntryPoint = searchStack.Last();
-                bool previouslyMet = false;
-                bool foundEntry = false;
-                foreach (var entry in searchStack)
+                var stackList = searchStack.ToList(); // top-first order
+                int matchIndex = stackList.FindIndex(entry => entry.Item1 == rule && entry.Item2 == cursor);
+                List<(Rule, int)> sequence = matchIndex > 0 ? stackList.Take(matchIndex).ToList() : [];
+                if (sequence.Count == 0)
                 {
-                    if (entry.Item2 != cursor)
-                    {
-                        foundEntry = false;
-                        continue;
-                    }
-                    if (foundEntry && entry.Item1 == rule)
-                    {
-                        previouslyMet = true;
-                        break;
-                    }
-                    foundEntry = entry.Item1 == rule;
+                    Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
+                    return false;
                 }
-                if (!previouslyMet)
+                if (sequence.Count >= searchStack.Count / 2)
                 {
                     searchStack.Push((rule, cursor));
-                    return true; // unlikely to be circular, even if we saw this rule at this cursor before, it was in a different context
+                    return true;
                 }
-                Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
-                return false;
+                var tail = stackList.Skip(matchIndex).ToList();
+                bool hasRepeat = false;
+                for (int i = 0; i + sequence.Count <= tail.Count; i++)
+                {
+                    bool match = true;
+                    for (int j = 0; j < sequence.Count; j++)
+                    {
+                        if (tail[i + j].Item1 != sequence[j].Item1 || tail[i + j].Item2 != sequence[j].Item2)
+                        {
+                            match = false;
+                            break;
+                        }
+                    }
+                    if (match)
+                    {
+                        hasRepeat = true;
+                        break;
+                    }
+                }
+                if (hasRepeat)
+                {
+                    Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
+                    return false;
+                }
+                searchStack.Push((rule, cursor));
+                return true;
             }
             searchStack.Push((rule, cursor));
             return true;
@@ -533,7 +548,7 @@ class ParserV3
     {
         newCursor = cursor;
         expandLimit = 0;
-        if (!antiCompute.Studying(searchStack,rule, cursor))
+        if (!antiCompute.Studying(searchStack, rule, cursor))
         {
             Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.", depth);
             ruleTree = null;
