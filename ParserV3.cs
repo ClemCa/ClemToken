@@ -767,9 +767,13 @@ class ParserV3
                 return Cleanup(success);
             case Lookahead lookahead:
                 // zero-width rule
+                // it isn't a regex lookahead, it looks forward for a specific string no matter what stands before it,
+                // it's meant for grammar optimization, to avoid extra expensive processing if a simple lookup can disqualify
+                // a rule ahead of time
                 int endSearch = code.IndexOf('\n', cursor);
                 int foundIndex = code.IndexOf(lookahead.Value!, cursor, endSearch == -1 ? code.Length - cursor : endSearch - cursor);
-                if (foundIndex == cursor)
+                Logger.Log($"> Lookahead {lookahead.Name} ({lookahead.Value}) on {code[cursor..(foundIndex == -1 ? code.Length : foundIndex)]}", depth);
+                if (foundIndex != -1)
                 {
                     ruleTree = null;
                     expandLimit = expandAllowed;
