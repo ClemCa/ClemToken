@@ -786,10 +786,13 @@ class ParserV3
                     success = true;
                     ruleOutput = null;
                 }
-                if (ruleOutput.HasValue && reference.Value != null && !reference.Value.Contains('@'))
+                if (ruleOutput.HasValue)
                 {
                     var val = ruleOutput.Value;
-                    val.Token.Name = reference.Value;
+                    if (referenceRule.Ignored == true)
+                        val.Token.Ignored = true;
+                    if (reference.Value != null && !reference.Value.Contains('@'))
+                        val.Token.Name = reference.Value;
                     ruleOutput = val;
                 }
                 AntiCompute.Finished(searchStack, referenceRule, cursor);
