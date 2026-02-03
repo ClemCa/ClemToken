@@ -463,7 +463,7 @@ namespace ClemToken
                     } else if (tk is Lookahead lk && lk.Optional)
                     {
                         int closingBracket = -1;
-                        int j = i + 4;
+                        int j = i;
                         while (j < line.Length)
                         {
                             if (line[j] == ']' && line[j - 1] != '\\')
@@ -477,7 +477,8 @@ namespace ClemToken
                         {
                             throw new Exception("Unmatched opening bracket in lookahead: " + line[i..line.Length]);
                         }
-                        tk = ExploreLookahead(line[(i + 4)..closingBracket]);
+                        tk = ExploreLookahead(line[(i-1)..closingBracket]);
+                        i = closingBracket + 1;
                     }
                     else
                     {
@@ -674,7 +675,7 @@ namespace ClemToken
                         if (tk is Lookahead lk && lk.Optional)
                         {
                             int closingBracket = -1;
-                            int j = i + 4;
+                            int j = i;
                             while (j < text.Length)
                             {
                                 if (text[j] == ']' && text[j - 1] != '\\')
@@ -688,7 +689,8 @@ namespace ClemToken
                             {
                                 throw new Exception("Unmatched opening bracket in lookahead: " + text[i..text.Length]);
                             }
-                            tk = ExploreLookahead(text[(i + 4)..closingBracket]);
+                            tk = ExploreLookahead(text[(i-1)..closingBracket]);
+                            i = closingBracket + 1;
                         }
                         if (tk is Anchor)
                         {
