@@ -334,3 +334,24 @@ import @identifier _(. @identifier)* from @identifier ;
         )
     )
 )
+@time_unit: [dec | yr | mo]:
+(
+    Name: time_unit
+    Value: @time_unit:
+    (
+        Value: [dec | yr | mo]
+        Ignored: true
+        (
+            Name: dec
+            Value: dec
+        )
+        (
+            Name: yr
+            Value: yr
+        )
+        (
+            Name: mo
+            Value: mo
+        )
+    )
+)

@@ -469,7 +469,7 @@ namespace ClemToken
                             tk.Ignored = true;
                             i++;
                         }
-                        Logger.Log("Found optional: " + tk.Value);
+                        Logger.Log("Found optional: " + tk.Value+" (ignored: "+tk.Ignored+")");
                     }
                     else if (tk is Lookahead lk && lk.Optional)
                     {

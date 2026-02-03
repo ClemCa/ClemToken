@@ -220,8 +220,8 @@ namespace ClemToken
                     goto children; // anchor does not have extra data
                 case 5:
                     Optional o = rule is Optional optional ? optional : new();
-                    rule = o;
                     o.Ignored = Mirror(o.Ignored, bytes);
+                    rule = o;
                     goto children; // optional does not have extra data
                 case 6:
                     Lookahead l = rule is Lookahead lookahead ? lookahead : new();

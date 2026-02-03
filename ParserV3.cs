@@ -624,11 +624,12 @@ class ParserV3
                     {
                         Logger.Log($"Optional matched: {optional.Name} ({optional.Value}) at cursor {cursor}, for {optional.Children[i].Name} ({optional.Children[i].Value}): ({singleRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                         ruleTree = singleRuleTree?.Children[0] ?? null; // unwrap the group
+                        Logger.Log($"Ignored status: {optional.Ignored}", depth);
                         if (optional.Ignored && ruleTree.HasValue)
                         {
-                            var cp = ruleTree.Value;
-                            cp.Token.Ignored = true;
-                            ruleTree = cp;
+                            var ct = ruleTree.Value;
+                            ct.Token.Ignored = true;
+                            ruleTree = ct;
                         }
                         return true;
                     }
