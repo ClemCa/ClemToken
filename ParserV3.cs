@@ -273,6 +273,81 @@ class SimpleChecker(string checkString) : Checker
     }
 }
 
+
+class AntiCompute()
+{
+    private static int recursion_limit = 25;
+    private static int recursion_repeat_limit = 5;
+    public static void ApplySpecs(SpecStore specStore)
+    {
+        recursion_limit = int.Parse(specStore.GetSpecDefinition("recursion_limit", "25"));
+        recursion_repeat_limit = int.Parse(specStore.GetSpecDefinition("recursion_repeat_limit", "5"));
+    }
+    public static bool Studying(Optimizations optimizations, Rule rule, int cursor)
+    {
+        if (optimizations.SearchStackDepth > recursion_limit)
+        {
+            return false;
+        }
+        if (optimizations.SearchStack.Contains((rule.UID, cursor)))
+        {
+            var stackList = optimizations.SearchStack.ToList(); // top-first order
+            if (stackList.Count((v) => v.Item1 == rule.UID && v.Item2 == cursor) > recursion_repeat_limit)
+            {
+                return false;
+            }
+            int matchIndex = stackList.FindIndex(entry => entry.Item1 == rule.UID && entry.Item2 == cursor);
+            List<(string, int)> sequence = stackList.Take(matchIndex).ToList();
+            if (sequence.Count == 0)
+            {
+                Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
+                return false;
+            }
+            if (sequence.Count >= optimizations.SearchStackDepth / 2)
+            {
+                optimizations.PushSearch(rule, cursor);
+                return true;
+            }
+            var tail = stackList.Skip(matchIndex).ToList();
+            bool hasRepeat = false;
+            for (int i = 0; i + sequence.Count <= tail.Count; i++)
+            {
+                bool match = true;
+                for (int j = 0; j < sequence.Count; j++)
+                {
+                    if (tail[i + j].Item1 != sequence[j].Item1 || tail[i + j].Item2 != sequence[j].Item2)
+                    {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match)
+                {
+                    hasRepeat = true;
+                    break;
+                }
+            }
+            if (hasRepeat)
+            {
+                Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
+                return false;
+            }
+            optimizations.PushSearch(rule, cursor);
+            return true;
+        }
+            optimizations.PushSearch(rule, cursor);
+            return true;
+        }
+        public static void Finished(Optimizations optimizations, Rule rule, int cursor)
+        {
+            if (optimizations.PeekSearch() != (rule.UID, cursor))
+            {
+                throw new InvalidOperationException("AntiCompute stack corrupted.");
+            }
+            optimizations.PopSearch();
+        }
+    }
+    
 class ParserV3
 {
     public static Tree Parse(string code, Rule[] rules, Spec[] specs)
@@ -435,7 +510,7 @@ class ParserV3
         }
         return false;
     }
-    static Tree ExpandLastNode(Tree target, string code, int by = 1)
+    internal static Tree ExpandLastNode(Tree target, string code, int by = 1)
     {
         if (target.Children.Count == 0)
         {
@@ -556,79 +631,6 @@ class ParserV3
         return addressedTree;
     }
 
-    class AntiCompute()
-    {
-        private static int recursion_limit = 25;
-        private static int recursion_repeat_limit = 5;
-        public static void ApplySpecs(SpecStore specStore)
-        {
-            recursion_limit = int.Parse(specStore.GetSpecDefinition("recursion_limit", "25"));
-            recursion_repeat_limit = int.Parse(specStore.GetSpecDefinition("recursion_repeat_limit", "5"));
-        }
-        public static bool Studying(Optimizations optimizations, Rule rule, int cursor)
-        {
-            if (optimizations.SearchStackDepth > recursion_limit)
-            {
-                return false;
-            }
-            if (optimizations.SearchStack.Contains((rule.UID, cursor)))
-            {
-                var stackList = optimizations.SearchStack.ToList(); // top-first order
-                if (stackList.Count((v) => v.Item1 == rule.UID && v.Item2 == cursor) > recursion_repeat_limit)
-                {
-                    return false;
-                }
-                int matchIndex = stackList.FindIndex(entry => entry.Item1 == rule.UID && entry.Item2 == cursor);
-                List<(string, int)> sequence = stackList.Take(matchIndex).ToList();
-                if (sequence.Count == 0)
-                {
-                    Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
-                    return false;
-                }
-                if (sequence.Count >= optimizations.SearchStackDepth / 2)
-                {
-                    optimizations.PushSearch(rule, cursor);
-                    return true;
-                }
-                var tail = stackList.Skip(matchIndex).ToList();
-                bool hasRepeat = false;
-                for (int i = 0; i + sequence.Count <= tail.Count; i++)
-                {
-                    bool match = true;
-                    for (int j = 0; j < sequence.Count; j++)
-                    {
-                        if (tail[i + j].Item1 != sequence[j].Item1 || tail[i + j].Item2 != sequence[j].Item2)
-                        {
-                            match = false;
-                            break;
-                        }
-                    }
-                    if (match)
-                    {
-                        hasRepeat = true;
-                        break;
-                    }
-                }
-                if (hasRepeat)
-                {
-                    Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
-                    return false;
-                }
-                optimizations.PushSearch(rule, cursor);
-                return true;
-            }
-            optimizations.PushSearch(rule, cursor);
-            return true;
-        }
-        public static void Finished(Optimizations optimizations, Rule rule, int cursor)
-        {
-            if (optimizations.PeekSearch() != (rule.UID, cursor))
-            {
-                throw new InvalidOperationException("AntiCompute stack corrupted.");
-            }
-            optimizations.PopSearch();
-        }
-    }
 
     static bool Match(string code, int cursor, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, out Tree? foundTree, out int newCursor, out int expandLimit, Optimizations optimizations)
     {
@@ -660,37 +662,27 @@ class ParserV3
         return false; // No match found
     }
 
-    static bool Check(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, AntiCompute antiCompute, Optimizations optimizations, int depth = 0)
+    internal static bool Check(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, AntiCompute antiCompute, Optimizations optimizations, int depth = 0)
     {
         newCursor = cursor;
         expandLimit = 0;
-        bool NonGroupChildrenCheck(Rule target, int startCursor, int expandAllowed, out int newCursor, out Tree? ruleTree, out int expandLimit)
-        {
-            if (SingleGroupCheck(code, startCursor, expandAllowed, new Group((1, 1), target.Name, false, target.Children), specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth + 1, antiCompute, optimizations))
-            {
-                if (ruleTree == null)
-                {
-                    return true; // Anchor matched but no tree created
-                }
-                Logger.Log($"Anchor matched: {target.Name} at cursor {startCursor} -> +{expandLimit} ({ruleTree.Value.Token.Value}) | ({code[startCursor..Math.Min(startCursor + 5, code.Length)]})", depth);
-                var rt = ruleTree.Value;
-                rt.Token.Name = target.Name;
-                ruleTree = rt;
-                return true; // Anchor matched
-            }
-            return false;
-        }
         switch (rule)
         {
             case Anchor anchor:
                 // 0 width rule
+                expandedBy = 0;
                 if (anchor.Children.Length == 0)
                 {
                     ruleTree = null;
                     return true;
                 }
-                return NonGroupChildrenCheck(anchor, cursor, expandAllowed, out newCursor, out ruleTree, out expandLimit);
+                bool res = GroupParser.CheckGroup(code, cursor, expandAllowed, anchor, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth, specStore, referenceStore, antiCompute, optimizations);
+                if (res) {
+                    Logger.Log($"Anchor matched: {anchor.Name} at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                }
+                return res;
             case Optional optional:
+                expandedBy = 0; // TODO redo
                 Logger.Log("> " + optional.Name + " (" + optional.Value + ")", depth);
                 var tempGroup = new Group((1, 1), false) // workaround to reuse the expansion code
                 {
@@ -725,6 +717,7 @@ class ParserV3
                 {
                     throw new Exception("Empty simple rule");
                 }
+                expandedBy = 0;
                 for (int i = 0; i < simple.Value.Length; i++)
                 {
                     if (cursor + i >= code.Length || code[cursor + i] != simple.Value[i])
@@ -739,29 +732,47 @@ class ParserV3
                             {
                                 throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
                             }
-                            bool res = Check(code, cursor + 1, expandAllowed - 1, simple, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, antiCompute, optimizations, depth + 1);
+                            bool res = Check(code, cursor + 1, expandAllowed - 1, simple, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, out expandedBy, antiCompute, optimizations, depth + 1);
+                            expandedBy += 1;
                             Logger.Log($"Simple expanded: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                             return res;
                         }
+                        expandedBy = 0;
                         ruleTree = null; // No match for simple rule
                         return false;
                     }
                 }
-                bool ngSuccess = NonGroupChildrenCheck(simple, cursor + simple.Value.Length, 0, out newCursor, out ruleTree, out expandLimit);
-                if (ngSuccess && ruleTree.HasValue)
+                if (simple.Children.Length > 0)
                 {
-                    var rt = ruleTree.Value;
-                    rt.Token.Value = code[cursor..(cursor + simple.Value.Length)] + rt.Token.Value;
-                    rt.Token.Line = cursor;
-                    ruleTree = rt;
+                    // turn the simple token into a group
+                    Group fakeGroup = new((1, 1), simple.Name, simple.Ignored, simple.Children)
+                    {
+                        UID = simple.UID // preserve UID for optimizations
+                    };
+                    bool groupSuccess = GroupParser.CheckGroup(code, cursor + simple.Value.Length, 0, fakeGroup, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth + 1, specStore, referenceStore, antiCompute, optimizations);
+                    if (!groupSuccess) {
+                        ruleTree = null;
+                        return false; // if the group doesn't match, the simple doesn't match, even if the string does
+                    }
+                    if (ruleTree.HasValue)
+                    {
+                        // update token of the wider group to include simple
+                        var rt = ruleTree.Value;
+                        rt.Token.Value = code[cursor..(cursor + simple.Value.Length)] + rt.Token.Value;
+                        rt.Token.Line = cursor;
+                        ruleTree = rt;
+                    }
+                } else {
+                    ruleTree = new Tree(new Token(simple.Name, simple.Value, cursor, cursor + simple.Value.Length, simple.Ignored), []);
                 }
                 Logger.Log($"Simple matched: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
-                return ngSuccess;
+                return true;
             case Reserved reserved:
                 if (reserved.Children.Length > 0)
                 {
                     throw new Exception("Reserved rules with children are not supported in this version of the parser.");
                 }
+                expandedBy = 0;
                 if (cursor >= code.Length)
                 {
                     ruleTree = null;
@@ -844,8 +855,8 @@ class ParserV3
                         throw new NotSupportedException($"Reserved rule '{reserved.Name}' is not supported. If it's a custom spec, make sure it is defined.");
                 }
             case Group group:
-                return CheckGroup(code, cursor, expandAllowed, group, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth, antiCompute, optimizations);
-            case Reference reference:
+                return GroupParser.CheckGroup(code, cursor, expandAllowed, group, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth, specStore, referenceStore, antiCompute, optimizations);
+            case Reference reference: //TODO redo
                 if (reference.Children.Length > 0)
                 {
                     throw new Exception("References with children are not supported in this version of the parser.");
@@ -872,7 +883,7 @@ class ParserV3
                     return false; // already studied this rule at this cursor, avoid infinite recursion
                 }
                 Logger.Log($"@> Reference {reference.Name} to {referenceRule.Name}", depth);
-                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, antiCompute, optimizations, depth + 1);
+                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, out expandedBy, antiCompute, optimizations, depth + 1);
                 if (!success && reference.Repeat.Item1 == 0)
                 {
                     success = true;
@@ -948,54 +959,6 @@ class ParserV3
             optimizations.CacheLookahead(lookahead, index);
         }
         return index;
-    }
-    static bool CheckGroup(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth, AntiCompute antiCompute, Optimizations optimizations)
-    {
-        newCursor = cursor;
-        expandLimit = 0;
-        int lastExpandLimit = expandAllowed;
-        if (group.Repeat.Item1 == 0 && group.Repeat.Item2 == 0)
-        {
-            ruleTree = null;
-            expandLimit = expandAllowed;
-            return true;
-        }
-        List<Tree> children = [];
-        for (int i = 0; newCursor < code.Length && (i < group.Repeat.Item2 || group.Repeat.Item2 == -1); i++)
-        {
-            if (!SingleGroupCheck(code, newCursor, lastExpandLimit, group, specStore, referenceStore, out int iterationCursor, out Tree? groupTree, out int groupExpandLimit, depth, antiCompute, optimizations))
-            {
-                if (i < group.Repeat.Item1) // If we haven't matched the minimum required repetitions
-                {
-                    ruleTree = null; // Not enough repetitions matched
-                    return false; // Not enough repetitions matched
-                }
-                expandLimit = lastExpandLimit;
-                break; // Stop if we reach the maximum or if no more matches are possible
-            }
-            if (groupTree == null)
-            {
-                throw new InvalidOperationException("Group tree should not be null after a successful match.");
-            }
-            children.Add(groupTree.Value);
-            newCursor = iterationCursor;
-            expandLimit = groupExpandLimit;
-            lastExpandLimit = groupExpandLimit;
-        }
-        if (children.Count == 0)
-        {
-            expandLimit = expandAllowed;
-            ruleTree = null;
-        }
-        else if (children.Count == 1)
-        {
-            ruleTree = children[0];
-        }
-        else
-        {
-            ruleTree = new Tree(new Token(group.Name + "*", code[cursor..newCursor], cursor, 0, group.Ignored), children);
-        }
-        return true;
     }
 
     static bool SingleGroupCheck(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth, AntiCompute antiCompute, Optimizations optimizations) // no repetition, just the children
