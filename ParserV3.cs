@@ -45,7 +45,7 @@ class SpecStore
         else
             checker = new RegexChecker(defaultPattern);
         _checkerCache[name] = checker;
-        Logger.Log($"Spec '{name}' resolved to regex: {checker}");
+        // Logger.Log($"Spec '{name}' resolved to regex: {checker}");
         return checker;
     }
     public static Checker GenerateChecker(Spec spec)
@@ -353,6 +353,10 @@ class ParserV3
     public static Tree Parse(string code, Rule[] rules, Spec[] specs)
     {
         ReferenceStore referenceStore = new();
+        if (string.IsNullOrEmpty(rules[0].UID))
+        {
+            rules = [.. rules.Select((r, i) => { r.UID = Guid.NewGuid().ToString(); return r; })];
+        }
         foreach (var rule in rules)
         {
             referenceStore.AddIfReferenceable(rule);
@@ -515,6 +519,7 @@ class ParserV3
         if (target.Children.Count == 0)
         {
             target.Token.Value = code[target.Token.Line..(target.Token.Line + target.Token.Value.Length + by)];
+            Logger.Log($"Expanded node by {by} to: \"{target.Token.Value}\" (size {target.Token.Value.Length})", 1);
             return target;
         }
         var lastNode = target.Children[^1];
@@ -635,7 +640,6 @@ class ParserV3
     static bool Match(string code, int cursor, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, out Tree? foundTree, out int newCursor, out int expandLimit, Optimizations optimizations)
     {
         newCursor = cursor; // No match found, return the original 
-        AntiCompute antiCompute = new();
         foreach (var rule in rules)
         {
             // check if current call stack is near stack overflow
@@ -647,7 +651,7 @@ class ParserV3
             {
                 throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
             }
-            if (Check(code, cursor, 0, rule, specStore, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit, out int expandedBy, antiCompute, optimizations))
+            if (Check(code, cursor, 0, rule, specStore, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit, out int expandedBy, optimizations))
             {
                 Logger.Log($"Matched rule {rule} {rule.Name} at cursor: {cursor} size: {cursor - ruleCursor}");
                 newCursor = ruleCursor;
@@ -663,7 +667,7 @@ class ParserV3
         return false; // No match found
     }
 
-    internal static bool Check(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, AntiCompute antiCompute, Optimizations optimizations, int depth = 0)
+    internal static bool Check(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, Optimizations optimizations, int depth = 0)
     {
         newCursor = cursor;
         expandLimit = 0;
@@ -677,9 +681,9 @@ class ParserV3
                     ruleTree = null;
                     return true;
                 }
-                bool res = GroupParser.CheckGroup(code, cursor, expandAllowed, anchor, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth, specStore, referenceStore, antiCompute, optimizations);
+                bool res = GroupParser.CheckGroup(code, cursor, expandAllowed, anchor, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth, specStore, referenceStore, optimizations);
                 if (res) {
-                    Logger.Log($"Anchor matched: {anchor.Name} at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                    Logger.Log($"Anchor matched: {anchor.Name} at cursor {cursor}->{newCursor} +{expandLimit}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                 }
                 return res;
             case Optional optional:
@@ -692,7 +696,7 @@ class ParserV3
                 {
                     tempGroup.Name = optional.Name + "_" + i;
                     tempGroup.Children[0] = optional.Children[i]; // only child set here to avoid reallocation
-                    if (GroupParser.CheckGroup(code, cursor, expandAllowed, tempGroup, out newCursor, out var optionalRuleTree, out expandLimit, out expandedBy, depth + 1, specStore, referenceStore, antiCompute, optimizations))
+                    if (GroupParser.CheckGroup(code, cursor, expandAllowed, tempGroup, out newCursor, out var optionalRuleTree, out expandLimit, out expandedBy, depth + 1, specStore, referenceStore, optimizations))
                     {
                         Logger.Log($"Optional matched without expansion: {optional.Name} ({optional.Value}) at cursor {cursor}, for {optional.Children[i].Name} ({optional.Children[i].Value}): ({optionalRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                         ruleTree = optionalRuleTree?.Children[0] ?? null; // unwrap the group
@@ -725,26 +729,11 @@ class ParserV3
                 {
                     if (cursor + i >= code.Length || code[cursor + i] != simple.Value[i])
                     {
-                        if (expandAllowed > 0)
-                        {
-                            try
-                            {
-                                RuntimeHelpers.EnsureSufficientExecutionStack();
-                            }
-                            catch (InsufficientExecutionStackException)
-                            {
-                                throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
-                            }
-                            bool simpleRes = Check(code, cursor + 1, expandAllowed - 1, simple, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, out expandedBy, antiCompute, optimizations, depth + 1);
-                            expandedBy += 1;
-                            Logger.Log($"Simple expanded: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
-                            return simpleRes;
-                        }
-                        expandedBy = 0;
-                        ruleTree = null; // No match for simple rule
+                        ruleTree = null;
                         return false;
                     }
                 }
+                newCursor += simple.Value.Length;
                 if (simple.Children.Length > 0)
                 {
                     // turn the simple token into a group
@@ -752,7 +741,7 @@ class ParserV3
                     {
                         UID = simple.UID // preserve UID for optimizations
                     };
-                    bool groupSuccess = GroupParser.CheckGroup(code, cursor + simple.Value.Length, 0, fakeGroup, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth + 1, specStore, referenceStore, antiCompute, optimizations);
+                    bool groupSuccess = GroupParser.CheckGroup(code, newCursor, 0, fakeGroup, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth + 1, specStore, referenceStore, optimizations);
                     if (!groupSuccess) {
                         ruleTree = null;
                         return false; // if the group doesn't match, the simple doesn't match, even if the string does
@@ -761,12 +750,12 @@ class ParserV3
                     {
                         // update token of the wider group to include simple
                         var rt = ruleTree.Value;
-                        rt.Token.Value = code[cursor..(cursor + simple.Value.Length)] + rt.Token.Value;
+                        rt.Token.Value = code[cursor..newCursor] + rt.Token.Value;
                         rt.Token.Line = cursor;
                         ruleTree = rt;
                     }
                 } else {
-                    ruleTree = new Tree(new Token(simple.Name, simple.Value, cursor, cursor + simple.Value.Length, simple.Ignored), []);
+                    ruleTree = new Tree(new Token(simple.Name, simple.Value, cursor, newCursor, simple.Ignored), []);
                 }
                 Logger.Log($"Simple matched: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                 return true;
@@ -858,7 +847,7 @@ class ParserV3
                         throw new NotSupportedException($"Reserved rule '{reserved.Name}' is not supported. If it's a custom spec, make sure it is defined.");
                 }
             case Group group:
-                return GroupParser.CheckGroup(code, cursor, expandAllowed, group, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth, specStore, referenceStore, antiCompute, optimizations);
+                return GroupParser.CheckGroup(code, cursor, expandAllowed, group, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth, specStore, referenceStore, optimizations);
             case Reference reference:
                 if (reference.Children.Length > 0)
                 {
@@ -887,7 +876,7 @@ class ParserV3
                     return false; // already studied this rule at this cursor, avoid infinite recursion
                 }
                 Logger.Log($"@> Reference {reference.Name} to {referenceRule.Name}", depth);
-                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, out expandedBy, antiCompute, optimizations, depth + 1);
+                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, out expandedBy, optimizations, depth + 1);
                 if (!success && reference.Repeat.Item1 == 0)
                 {
                     success = true;
