@@ -89,6 +89,7 @@ class Optimizations
     public void PopSearch()
     {
         searchStack.Pop();
+        ClearLookahead();
     }
     //! Preemptive invalidation
     private HashSet<(string, int)> _invalidated = new();
@@ -107,6 +108,18 @@ class Optimizations
         string key = searchStack.Count > 0 ? searchStack.Select(entry => entry.Item1 + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
         Logger.Log($"Caching lookahead: {lookahead.Name} at index {foundIndex} with stack {key}");
         _lookaheadCache.Add((key, (lookahead.UID, foundIndex)));
+    }
+    private void ClearLookahead()
+    {
+        string key = searchStack.Count > 0 ? searchStack.Select(entry => entry.Item1 + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
+        for (int i = _lookaheadCache.Count - 1; i >= 0; i--)
+        {
+            // strictly longer so it's only children
+            if (_lookaheadCache[i].stack.Length > key.Length && _lookaheadCache[i].stack.StartsWith(key))
+            {
+                _lookaheadCache.RemoveAt(i);
+            }
+        }
     }
     public bool IsCached(Rule lookahead, int foundIndex)
     {

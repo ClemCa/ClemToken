@@ -467,10 +467,6 @@ namespace ClemToken
                     else if (tk is Reference)
                     {
                         Logger.Log("Found reference: " + acc);
-                        if (!tk.Value!.Contains('@'))
-                        {
-                            i += tk.Value.Length + 1;
-                        }
                     }
                     else if (tk is Anchor)
                     {
@@ -708,13 +704,6 @@ namespace ClemToken
                             {
                                 tk.Ignored = true;
                                 i++;
-                            }
-                        }
-                        if (tk is Reference)
-                        {
-                            if (!tk.Value!.Contains('@'))
-                            {
-                                i += tk.Name.Length + 2;
                             }
                         }
                         if (tk is Lookahead lk && lk.Optional)
