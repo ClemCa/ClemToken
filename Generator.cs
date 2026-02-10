@@ -10,6 +10,7 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
+        public string UID { get; set; }
     }
 
     struct Simple : Rule
@@ -20,6 +21,7 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
+        public string UID { get; set; }
         public Simple(string value)
         {
             Name = value;
@@ -28,6 +30,7 @@ namespace ClemToken
             Ignored = false;
             Children = [];
             IsReserved = false;
+            UID = "";
         }
     }
 
@@ -39,6 +42,7 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
+        public string UID { get; set; }
         public Reserved(string value, bool ignored = false)
         {
             int start = value.IndexOf('[');
@@ -49,6 +53,7 @@ namespace ClemToken
             Ignored = ignored;
             Children = [];
             IsReserved = true;
+            UID = "";
         }
     }
 
@@ -60,6 +65,7 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
+        public string UID { get; set; }
         public Reference(string value, bool optional = false, string? name = null)
         {
             int start = value.IndexOf('@');
@@ -69,6 +75,7 @@ namespace ClemToken
             Ignored = false;
             Children = [];
             IsReserved = false;
+            UID = "";
         }
     }
     struct Anchor : Rule
@@ -79,6 +86,7 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
+        public string UID { get; set; }
         public Anchor(string value, Rule[]? children = null)
         {
             Ignored = value.EndsWith("?:");
@@ -93,6 +101,7 @@ namespace ClemToken
             Repeat = (1, 1);
             Children = children ?? [];
             IsReserved = false;
+            UID = "";
         }
     }
     struct Optional : Rule
@@ -103,6 +112,7 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
+        public string UID { get; set; }
         public Optional(Rule[]? options = null)
         {
             Name = "Optional";
@@ -110,6 +120,7 @@ namespace ClemToken
             Repeat = (1, 1);
             IsReserved = false;
             Children = options ?? [];
+            UID = "";
         }
     }
     struct Lookahead : Rule
@@ -121,6 +132,7 @@ namespace ClemToken
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
         public bool Optional { get; set; }
+        public string UID { get; set; }
         public Lookahead(string value, bool optional = false)
         {
             Name = "Lookahead";
@@ -130,6 +142,7 @@ namespace ClemToken
             Children = [];
             IsReserved = false;
             Optional = optional;
+            UID = "";
         }
     }
     struct Group : Rule
@@ -140,6 +153,7 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
+        public string UID { get; set; }
         public Group((int, int) repeat, bool ignored)
         {
             Repeat = repeat;
@@ -148,6 +162,7 @@ namespace ClemToken
             Ignored = ignored;
             Children = [];
             IsReserved = false;
+            UID = "";
         }
         public Group((int, int) repeat, string name, bool ignored, Rule[] children)
         {
@@ -157,6 +172,7 @@ namespace ClemToken
             Ignored = ignored;
             Children = children;
             IsReserved = false;
+            UID = "";
         }
         public Group(out bool subgroup, string? value, string? prefix, string? suffix)
         {
@@ -230,6 +246,7 @@ namespace ClemToken
                 }
             }
             Repeat = (start, end);
+            UID = "";
         }
     }
 
@@ -241,6 +258,7 @@ namespace ClemToken
         public bool Ignored { get; set; }
         public Rule[] Children { get; set; }
         public bool IsReserved { get; set; }
+        public string UID { get; set; }
         public Empty()
         {
             Repeat = (0, 0);
@@ -249,6 +267,7 @@ namespace ClemToken
             Ignored = false;
             Children = [];
             IsReserved = false;
+            UID = "";
         }
     }
 
@@ -280,6 +299,7 @@ namespace ClemToken
         public int Line { get; set; }
         public int Column { get; set; }
         public (string, int)[] Alternatives { get; set; }
+        public string UID { get; set; }
         public ProcessRule(Rule rule, int length, int line, int column, (string, int)[]? alternatives = null)
         {
             Empty = rule is ProcessRule ? ((ProcessRule)rule).Empty : rule is Empty;
@@ -299,6 +319,7 @@ namespace ClemToken
             IsReserved = rule.IsReserved;
             Line = line;
             Column = column;
+            UID = "";
         }
     }
 

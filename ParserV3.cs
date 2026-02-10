@@ -70,29 +70,50 @@ class Optimizations
             }
         }
     }
+    //! Search stack
+    private Stack<(string UID, int cursor)> searchStack = new();
+    public int SearchStackDepth => searchStack.Count;
+    public IEnumerable<(string UID, int cursor)> SearchStack => searchStack;
+    public IEnumerable<(Rule rule, int cursor)> SearchStackResolved(Rule[] rules)
+    {
+        return searchStack.Select(entry => (rules.First(r => r.UID == entry.UID), entry.cursor));
+    }
+    public void PushSearch(Rule rule, int cursor)
+    {
+        searchStack.Push((rule.UID, cursor));
+    }
+    public (string UID, int cursor) PeekSearch()
+    {
+        return searchStack.Peek();
+    }
+    public void PopSearch()
+    {
+        searchStack.Pop();
+    }
     //! Preemptive invalidation
-    private HashSet<(Rule, int)> _invalidated = new();
+    private HashSet<(string, int)> _invalidated = new();
     public void Invalidate(Rule rule, int cursor)
     {
-        _invalidated.Add((rule, cursor));
+        _invalidated.Add((rule.UID, cursor));
     }
     public bool IsInvalidated(Rule rule, int cursor)
     {
-        return _invalidated.Contains((rule, cursor));
+        return _invalidated.Contains((rule.UID, cursor));
     }
     //! Lookahead uniqueness
-    private List<(string stack, (Rule lookahead, int foundIndex) signature)> _lookaheadCache = [];
-    public void CacheLookahead(Stack<(Rule, int)> stack, Rule lookahead, int foundIndex)
+    private List<(string stack, (string UID, int foundIndex) signature)> _lookaheadCache = [];
+    public void CacheLookahead(Rule lookahead, int foundIndex)
     {
-        string key = stack.Count > 0 ? stack.Select(entry => entry.Item1.Name + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
-        _lookaheadCache.Add((key, (lookahead, foundIndex)));
+        string key = searchStack.Count > 0 ? searchStack.Select(entry => entry.Item1 + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
+        Logger.Log($"Caching lookahead: {lookahead.Name} at index {foundIndex} with stack {key}");
+        _lookaheadCache.Add((key, (lookahead.UID, foundIndex)));
     }
-    public bool IsCached(Stack<(Rule, int)> stack, Rule lookahead, int foundIndex)
+    public bool IsCached(Rule lookahead, int foundIndex)
     {
-        string key = stack.Count > 0 ? stack.Select(entry => entry.Item1.Name + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
+        string key = searchStack.Count > 0 ? searchStack.Select(entry => entry.Item1 + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
         foreach (var entry in _lookaheadCache)
         {
-            if (key.StartsWith(entry.stack) && entry.signature.foundIndex == foundIndex && entry.signature.lookahead == lookahead)
+            if (key.StartsWith(entry.stack) && entry.signature.foundIndex == foundIndex && entry.signature.UID == lookahead.UID)
             {
                 return true;
             }
@@ -263,21 +284,20 @@ class ParserV3
         string cleanedCode = CleanSource(specs, code);
         Logger.Log("Cleaned source:\n" + cleanedCode);
         Logger.Log("--------------------------------------------------");
-        Stack<(Rule, int)> searchStack = new();
         Optimizations optimizations = new();
         AntiCompute.ApplySpecs(specStore);
         try
         {
-            return Parse(cleanedCode, rules, specStore, referenceStore, searchStack, optimizations);
+            return Parse(cleanedCode, rules, specStore, referenceStore, optimizations);
         }
         catch (StackOverflowException)
         {
-            Logger.Error("Stack overflow during parsing. Possible infinite recursion in grammar rules. Search stack:\n" + string.Join(" -> ", searchStack.Select(r => $"{r.Item1.Name} ({r.Item2})").Reverse()));
+            Logger.Error("Stack overflow during parsing. Possible infinite recursion in grammar rules. Search stack:\n" + string.Join(" -> ", optimizations.SearchStack.Select(r => $"{r.Item1} ({r.Item2})").Reverse()));
             throw;
         }
         catch (Exception)
         {
-            Logger.Error("Exception during parsing. Search stack:\n" + string.Join(" -> ", searchStack.Select(r => $"{r.Item1.Name} ({r.Item2})").Reverse()));
+            Logger.Error("Exception during parsing. Search stack:\n" + string.Join(" -> ", optimizations.SearchStackResolved(rules).Select(r => $"{r.Item1.Name} ({r.Item2})").Reverse()));
             throw;
         }
     }
@@ -440,7 +460,7 @@ class ParserV3
         }
         return [.. newChildren.Select(CleanIgnored)];
     }
-    public static Tree Parse(string code, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, Stack<(Rule, int)> searchStack, Optimizations optimizations)
+    public static Tree Parse(string code, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, Optimizations optimizations)
     {
         var tree = new Tree(new Token("Root", "", 0, 0, false), []);
         int cursor = 0;
@@ -483,7 +503,7 @@ class ParserV3
                 cursor++;
                 continue;
             }
-            if (Match(code, cursor, rules, specStore, referenceStore, out Tree? foundTree, out int newCursor, out int matchExpandLimit, searchStack, optimizations))
+            if (Match(code, cursor, rules, specStore, referenceStore, out Tree? foundTree, out int newCursor, out int matchExpandLimit, optimizations))
             {
                 cursor = newCursor;
                 expandLimit = matchExpandLimit;
@@ -532,29 +552,29 @@ class ParserV3
             recursion_limit = int.Parse(specStore.GetSpecDefinition("recursion_limit", "25"));
             recursion_repeat_limit = int.Parse(specStore.GetSpecDefinition("recursion_repeat_limit", "5"));
         }
-        public static bool Studying(Stack<(Rule, int)> searchStack, Rule rule, int cursor)
+        public static bool Studying(Optimizations optimizations, Rule rule, int cursor)
         {
-            if (searchStack.Count > recursion_limit)
+            if (optimizations.SearchStackDepth > recursion_limit)
             {
                 return false;
             }
-            if (searchStack.Contains((rule, cursor)))
+            if (optimizations.SearchStack.Contains((rule.UID, cursor)))
             {
-                var stackList = searchStack.ToList(); // top-first order
-                if (stackList.Count((v) => v.Item1 == rule && v.Item2 == cursor) > recursion_repeat_limit)
+                var stackList = optimizations.SearchStack.ToList(); // top-first order
+                if (stackList.Count((v) => v.Item1 == rule.UID && v.Item2 == cursor) > recursion_repeat_limit)
                 {
                     return false;
                 }
-                int matchIndex = stackList.FindIndex(entry => entry.Item1 == rule && entry.Item2 == cursor);
-                List<(Rule, int)> sequence = stackList.Take(matchIndex).ToList();
+                int matchIndex = stackList.FindIndex(entry => entry.Item1 == rule.UID && entry.Item2 == cursor);
+                List<(string, int)> sequence = stackList.Take(matchIndex).ToList();
                 if (sequence.Count == 0)
                 {
                     Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
                     return false;
                 }
-                if (sequence.Count >= searchStack.Count / 2)
+                if (sequence.Count >= optimizations.SearchStackDepth / 2)
                 {
-                    searchStack.Push((rule, cursor));
+                    optimizations.PushSearch(rule, cursor);
                     return true;
                 }
                 var tail = stackList.Skip(matchIndex).ToList();
@@ -581,23 +601,23 @@ class ParserV3
                     Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
                     return false;
                 }
-                searchStack.Push((rule, cursor));
+                optimizations.PushSearch(rule, cursor);
                 return true;
             }
-            searchStack.Push((rule, cursor));
+            optimizations.PushSearch(rule, cursor);
             return true;
         }
-        public static void Finished(Stack<(Rule, int)> searchStack, Rule rule, int cursor)
+        public static void Finished(Optimizations optimizations, Rule rule, int cursor)
         {
-            if (searchStack.Peek() != (rule, cursor))
+            if (optimizations.PeekSearch() != (rule.UID, cursor))
             {
                 throw new InvalidOperationException("AntiCompute stack corrupted.");
             }
-            searchStack.Pop();
+            optimizations.PopSearch();
         }
     }
 
-    static bool Match(string code, int cursor, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, out Tree? foundTree, out int newCursor, out int expandLimit, Stack<(Rule, int)> searchStack, Optimizations optimizations)
+    static bool Match(string code, int cursor, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, out Tree? foundTree, out int newCursor, out int expandLimit, Optimizations optimizations)
     {
         newCursor = cursor; // No match found, return the original 
         AntiCompute antiCompute = new();
@@ -612,7 +632,7 @@ class ParserV3
             {
                 throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
             }
-            if (Check(code, cursor, 0, rule, specStore, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit, searchStack, antiCompute, optimizations))
+            if (Check(code, cursor, 0, rule, specStore, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit, antiCompute, optimizations))
             {
                 Logger.Log($"Matched rule {rule} {rule.Name} at cursor: {cursor} size: {cursor - ruleCursor}");
                 newCursor = ruleCursor;
@@ -627,13 +647,13 @@ class ParserV3
         return false; // No match found
     }
 
-    static bool Check(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, Stack<(Rule, int)> searchStack, AntiCompute antiCompute, Optimizations optimizations, int depth = 0)
+    static bool Check(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, AntiCompute antiCompute, Optimizations optimizations, int depth = 0)
     {
         newCursor = cursor;
         expandLimit = 0;
-        bool NonGroupChildrenCheck(Rule target, int startCursor, int expandAllowed, out int newCursor, out Tree? ruleTree, out int expandLimit, Stack<(Rule, int)> searchStack)
+        bool NonGroupChildrenCheck(Rule target, int startCursor, int expandAllowed, out int newCursor, out Tree? ruleTree, out int expandLimit)
         {
-            if (SingleGroupCheck(code, startCursor, expandAllowed, new Group((1, 1), target.Name, false, target.Children), specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth + 1, searchStack, antiCompute, optimizations))
+            if (SingleGroupCheck(code, startCursor, expandAllowed, new Group((1, 1), target.Name, false, target.Children), specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth + 1, antiCompute, optimizations))
             {
                 if (ruleTree == null)
                 {
@@ -656,7 +676,7 @@ class ParserV3
                     ruleTree = null;
                     return true;
                 }
-                return NonGroupChildrenCheck(anchor, cursor, expandAllowed, out newCursor, out ruleTree, out expandLimit, searchStack);
+                return NonGroupChildrenCheck(anchor, cursor, expandAllowed, out newCursor, out ruleTree, out expandLimit);
             case Optional optional:
                 Logger.Log("> " + optional.Name + " (" + optional.Value + ")", depth);
                 var tempGroup = new Group((1, 1), false) // workaround to reuse the expansion code
@@ -667,7 +687,7 @@ class ParserV3
                 {
                     tempGroup.Name = optional.Name + "_" + i;
                     tempGroup.Children[0] = optional.Children[i]; // only child set here to avoid reallocation
-                    if (SingleGroupCheck(code, cursor, expandAllowed, tempGroup, specStore, referenceStore, out newCursor, out var singleRuleTree, out expandLimit, depth + 1, searchStack, antiCompute, optimizations))
+                    if (SingleGroupCheck(code, cursor, expandAllowed, tempGroup, specStore, referenceStore, out newCursor, out var singleRuleTree, out expandLimit, depth + 1, antiCompute, optimizations))
                     {
                         Logger.Log($"Optional matched: {optional.Name} ({optional.Value}) at cursor {cursor}, for {optional.Children[i].Name} ({optional.Children[i].Value}): ({singleRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                         ruleTree = singleRuleTree?.Children[0] ?? null; // unwrap the group
@@ -706,7 +726,7 @@ class ParserV3
                             {
                                 throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
                             }
-                            bool res = Check(code, cursor + 1, expandAllowed - 1, simple, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, searchStack, antiCompute, optimizations, depth + 1);
+                            bool res = Check(code, cursor + 1, expandAllowed - 1, simple, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, antiCompute, optimizations, depth + 1);
                             Logger.Log($"Simple expanded: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                             return res;
                         }
@@ -714,7 +734,7 @@ class ParserV3
                         return false;
                     }
                 }
-                bool ngSuccess = NonGroupChildrenCheck(simple, cursor + simple.Value.Length, 0, out newCursor, out ruleTree, out expandLimit, searchStack);
+                bool ngSuccess = NonGroupChildrenCheck(simple, cursor + simple.Value.Length, 0, out newCursor, out ruleTree, out expandLimit);
                 if (ngSuccess && ruleTree.HasValue)
                 {
                     var rt = ruleTree.Value;
@@ -811,7 +831,7 @@ class ParserV3
                         throw new NotSupportedException($"Reserved rule '{reserved.Name}' is not supported. If it's a custom spec, make sure it is defined.");
                 }
             case Group group:
-                return CheckGroup(code, cursor, expandAllowed, group, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth, searchStack, antiCompute, optimizations);
+                return CheckGroup(code, cursor, expandAllowed, group, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, depth, antiCompute, optimizations);
             case Reference reference:
                 if (reference.Children.Length > 0)
                 {
@@ -832,14 +852,14 @@ class ParserV3
                     ruleTree = null;
                     return false; // avoids doing the extra work of computing the rule again at this cursor
                 }
-                if (!AntiCompute.Studying(searchStack, referenceRule, cursor))
+                if (!AntiCompute.Studying(optimizations, referenceRule, cursor))
                 {
                     Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.", depth);
                     ruleTree = null;
                     return false; // already studied this rule at this cursor, avoid infinite recursion
                 }
                 Logger.Log($"@> Reference {reference.Name} to {referenceRule.Name}", depth);
-                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, searchStack, antiCompute, optimizations, depth + 1);
+                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, antiCompute, optimizations, depth + 1);
                 if (!success && reference.Repeat.Item1 == 0)
                 {
                     success = true;
@@ -854,7 +874,7 @@ class ParserV3
                         val.Token.Name = reference.Value;
                     ruleOutput = val;
                 }
-                AntiCompute.Finished(searchStack, referenceRule, cursor);
+                AntiCompute.Finished(optimizations, referenceRule, cursor);
                 if (!success)
                 {
                     optimizations.Invalidate(referenceRule, cursor);
@@ -878,13 +898,13 @@ class ParserV3
                         {
                             continue;
                         }
-                        foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, searchStack, optimizations);
+                        foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, optimizations);
                         if (foundIndex != -1) break;
                     }
                 }
                 else
                 {
-                    foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, searchStack, optimizations);
+                    foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, optimizations);
                 }
                 Logger.Log($"> Lookahead {lookahead.Name} ({lookahead.Value}) on {code[cursor..(foundIndex == -1 ? code.Length : foundIndex)]}", depth);
                 if (foundIndex != -1)
@@ -899,24 +919,24 @@ class ParserV3
                 throw new NotSupportedException($"Rule type {rule.GetType().Name} is not supported.");
         }
     }
-    static int LookaheadLookup(string code, int startIndex, int endIndex, Rule lookahead, Stack<(Rule, int)> stack, Optimizations optimizations)
+    static int LookaheadLookup(string code, int startIndex, int endIndex, Rule lookahead, Optimizations optimizations)
     {
         int index = -1;
         while (index == -1 && startIndex < endIndex)
         {
             index = code.IndexOf(lookahead.Value!, startIndex, endIndex - startIndex);
             if (index == -1) return -1;
-            if (optimizations.IsCached(stack, lookahead, index))
+            if (optimizations.IsCached(lookahead, index))
             {
                 startIndex = index + 1; // skip this match and look for the next one
                 index = -1;
                 continue;
             }
-            optimizations.CacheLookahead(stack, lookahead, index);
+            optimizations.CacheLookahead(lookahead, index);
         }
         return index;
     }
-    static bool CheckGroup(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth, Stack<(Rule, int)> searchStack, AntiCompute antiCompute, Optimizations optimizations)
+    static bool CheckGroup(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth, AntiCompute antiCompute, Optimizations optimizations)
     {
         newCursor = cursor;
         expandLimit = 0;
@@ -930,7 +950,7 @@ class ParserV3
         List<Tree> children = [];
         for (int i = 0; newCursor < code.Length && (i < group.Repeat.Item2 || group.Repeat.Item2 == -1); i++)
         {
-            if (!SingleGroupCheck(code, newCursor, lastExpandLimit, group, specStore, referenceStore, out int iterationCursor, out Tree? groupTree, out int groupExpandLimit, depth, searchStack, antiCompute, optimizations))
+            if (!SingleGroupCheck(code, newCursor, lastExpandLimit, group, specStore, referenceStore, out int iterationCursor, out Tree? groupTree, out int groupExpandLimit, depth, antiCompute, optimizations))
             {
                 if (i < group.Repeat.Item1) // If we haven't matched the minimum required repetitions
                 {
@@ -965,7 +985,7 @@ class ParserV3
         return true;
     }
 
-    static bool SingleGroupCheck(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth, Stack<(Rule, int)> searchStack, AntiCompute antiCompute, Optimizations optimizations) // no repetition, just the children
+    static bool SingleGroupCheck(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth, AntiCompute antiCompute, Optimizations optimizations) // no repetition, just the children
     {
         Logger.Log($">> {group.Name} ({group.Value})", depth);
         newCursor = cursor; // always at the latest validated place
@@ -996,7 +1016,7 @@ class ParserV3
             {
                 throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
             }
-            if (!Check(code, targetCursor, 0, child, specStore, referenceStore, out int childCursor, out Tree? childTree, out int childExpandLimit, searchStack, antiCompute, optimizations, depth + 1))
+            if (!Check(code, targetCursor, 0, child, specStore, referenceStore, out int childCursor, out Tree? childTree, out int childExpandLimit, antiCompute, optimizations, depth + 1))
             {
                 if (targetCursor >= code.Length)
                 {

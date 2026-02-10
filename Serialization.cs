@@ -154,6 +154,7 @@ namespace ClemToken
             {
                 Logger.Log($"Rule {rules.Count + 1}");
                 rules.Add(MirrorRule(new ProcessRule(), bytes));
+                rules[^1].UID = Guid.NewGuid().ToString(); // assign a new UID to each deserialized rule
             }
             Logger.Log("All rules deserialized.");
             return ([.. rules], [.. specs]);
