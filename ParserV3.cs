@@ -59,6 +59,18 @@ class SpecStore
 
 class Optimizations
 {
+    public void DefinitiveProgression(int cursor)
+    {
+        _invalidated.RemoveWhere(entry => entry.Item2 < cursor);
+        for (int i = _lookaheadCache.Count - 1; i >= 0; i--)
+        {
+            if (_lookaheadCache[i].signature.foundIndex < cursor)
+            {
+                _lookaheadCache.RemoveAt(i);
+            }
+        }
+    }
+    //! Preemptive invalidation
     private HashSet<(Rule, int)> _invalidated = new();
     public void Invalidate(Rule rule, int cursor)
     {
@@ -68,9 +80,24 @@ class Optimizations
     {
         return _invalidated.Contains((rule, cursor));
     }
-    public void DefinitiveProgression(int cursor)
+    //! Lookahead uniqueness
+    private List<(string stack, (Rule lookahead, int foundIndex) signature)> _lookaheadCache = [];
+    public void CacheLookahead(Stack<(Rule, int)> stack, Rule lookahead, int foundIndex)
     {
-        _invalidated.RemoveWhere(entry => entry.Item2 < cursor);
+        string key = stack.Select(entry => entry.Item1.Name + "@" + entry.Item2).Aggregate((a, b) => a + b);
+        _lookaheadCache.Add((key, (lookahead, foundIndex)));
+    }
+    public bool IsCached(Stack<(Rule, int)> stack, Rule lookahead, int foundIndex)
+    {
+        string key = stack.Select(entry => entry.Item1.Name + "@" + entry.Item2).Aggregate((a, b) => a + b);
+        foreach (var entry in _lookaheadCache)
+        {
+            if (key.StartsWith(entry.stack) && entry.signature.foundIndex == foundIndex && entry.signature.lookahead == lookahead)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }
 
@@ -851,13 +878,13 @@ class ParserV3
                         {
                             continue;
                         }
-                        foundIndex = code.IndexOf(child.Value, cursor, endSearch == -1 ? code.Length - cursor : endSearch - cursor);
+                        foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, searchStack, optimizations);
                         if (foundIndex != -1) break;
                     }
                 }
                 else
                 {
-                    foundIndex = code.IndexOf(lookahead.Value!, cursor, endSearch == -1 ? code.Length - cursor : endSearch - cursor);
+                    foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, searchStack, optimizations);
                 }
                 Logger.Log($"> Lookahead {lookahead.Name} ({lookahead.Value}) on {code[cursor..(foundIndex == -1 ? code.Length : foundIndex)]}", depth);
                 if (foundIndex != -1)
@@ -871,6 +898,23 @@ class ParserV3
             default:
                 throw new NotSupportedException($"Rule type {rule.GetType().Name} is not supported.");
         }
+    }
+    static int LookaheadLookup(string code, int startIndex, int endIndex, Rule lookahead, Stack<(Rule, int)> stack, Optimizations optimizations)
+    {
+        int index = -1;
+        while (index == -1 && startIndex < endIndex)
+        {
+            index = code.IndexOf(lookahead.Value!, startIndex, endIndex - startIndex);
+            if (index == -1) return -1;
+            if (optimizations.IsCached(stack, lookahead, index))
+            {
+                startIndex = index + 1; // skip this match and look for the next one
+                index = -1;
+                continue;
+            }
+            optimizations.CacheLookahead(stack, lookahead, index);
+        }
+        return index;
     }
     static bool CheckGroup(string code, int cursor, int expandAllowed, Group group, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, int depth, Stack<(Rule, int)> searchStack, AntiCompute antiCompute, Optimizations optimizations)
     {
