@@ -334,6 +334,19 @@ import @identifier _(. @identifier)* from @identifier ;
         )
     )
 )
+@time: test:@time_unit sure
+(
+    Name: time
+    Value: @time:
+    (
+        Name: time_unit
+        Value: test
+    )
+    (
+        Name: sure
+        Value: sure
+    )
+)
 @time_unit: [dec | yr | mo]:
 (
     Name: time_unit

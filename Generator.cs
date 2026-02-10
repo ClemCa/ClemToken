@@ -510,7 +510,7 @@ namespace ClemToken
                     }
                     else
                     {
-                        Logger.Log("Found token: " + acc);
+                        Logger.Log("Found token: " + acc+ " ("+tk.GetType().Name+")");
                     }
                     if (root == null)
                     {
@@ -706,6 +706,14 @@ namespace ClemToken
                                 i++;
                             }
                         }
+                        if (tk is Reference)
+                        {
+                            Logger.Log("Found reference: " + text[i..space]);
+                            if (!tk.Value!.Contains('@'))
+                            {
+                                i += tk.Name.Length + 1; 
+                            }
+                        }
                         if (tk is Lookahead lk && lk.Optional)
                         {
                             int closingBracket = -1;
@@ -730,7 +738,7 @@ namespace ClemToken
                         {
                             throw new Exception("Anchors are not authorized in subgroups: " + text[i..]);
                         }
-                        Logger.Log("Found token: " + tk.Name);
+                        Logger.Log("Found token: " + tk.Name+ " ("+tk.GetType().Name+")");
                         i += tk.Value?.Length ?? tk.Name.Length;
                         rules.Add(tk);
                     }
@@ -793,7 +801,7 @@ namespace ClemToken
             {
                 return (false, new Optional());
             }
-            else if (token.Contains(':'))
+            else if (token.Contains(':') && token.Contains('('))
             {
                 var index = token.IndexOf(':');
                 if (index != 0 && token[index - 1] != ')')
@@ -838,7 +846,7 @@ namespace ClemToken
             {
                 return (false, new Reference(token[1..], optional: true));
             }
-            if (token.Contains("@"))
+            if (token.Contains('@'))
             {
                 if (VerifyNamedReference(token, out Reference reference))
                 {

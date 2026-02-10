@@ -57,7 +57,7 @@ class GroupParser
         ruleTree = new Tree(new Token(group.Name+"*", code[cursor..newCursor], cursor, 0, group.Ignored), instances);
         return true;
     }
-    // TODO handle all the types of expansion
+
     static bool CheckGroupChildren(string code, int cursor, int expandAllowed, Rule group, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, int depth, SpecStore specStore, ReferenceStore referenceStore, AntiCompute antiCompute, Optimizations optimizations)
     {
         newCursor = cursor;
@@ -67,7 +67,7 @@ class GroupParser
         List<Tree> children = [];
         foreach (var child in group.Children)
         {
-            if (!ParserV3.Check(code, newCursor, expandAllowed, child, specStore, referenceStore, out newCursor, out var childTree, out var childExpandLimit, out int childExpandedBy, antiCompute, optimizations, depth + 1))
+            if (!CheckChildWithExpansion(code, cursor, expandAllowed, child, specStore, referenceStore, out newCursor, out var childTree, out var childExpandLimit, out int childExpandedBy, depth, antiCompute, optimizations))
             {
                 return false;
             }
@@ -89,5 +89,48 @@ class GroupParser
             }
         }
         return true;
+    }
+
+    static bool CheckChildWithExpansion(string code, int cursor, int expandAllowed, Rule child, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, int depth, AntiCompute antiCompute, Optimizations optimizations)
+    {
+        newCursor = cursor;
+        ruleTree = null;
+        expandLimit = 0;
+        expandedBy = 0;
+
+        int targetCursor = cursor;
+        int expanded = 0;
+        while (true)
+        {
+            if (ParserV3.Check(code, targetCursor, expandAllowed, child, specStore, referenceStore, out int childCursor, out Tree? parsedTree, out int parsedExpandLimit, out int parsedExpandedBy, antiCompute, optimizations, depth + 1))
+            {
+                if (parsedExpandedBy > 0)
+                {
+                    expanded += parsedExpandedBy;
+                }
+                ruleTree = parsedTree;
+                expandLimit = parsedExpandLimit;                
+                expandedBy = expanded;
+                newCursor = childCursor;
+                return true;
+            }
+            if (targetCursor >= code.Length)
+            {
+                return false;
+            }
+            if (char.IsWhiteSpace(code[targetCursor]))
+            {
+                targetCursor++;
+                expanded++;
+                continue;
+            }
+            else if (expandAllowed > expanded)
+            {
+                targetCursor++;
+                expanded++;
+                continue;
+            }
+            return false;
+        }
     }
 }
