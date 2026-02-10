@@ -84,12 +84,12 @@ class Optimizations
     private List<(string stack, (Rule lookahead, int foundIndex) signature)> _lookaheadCache = [];
     public void CacheLookahead(Stack<(Rule, int)> stack, Rule lookahead, int foundIndex)
     {
-        string key = stack.Select(entry => entry.Item1.Name + "@" + entry.Item2).Aggregate((a, b) => a + b);
+        string key = stack.Count > 0 ? stack.Select(entry => entry.Item1.Name + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
         _lookaheadCache.Add((key, (lookahead, foundIndex)));
     }
     public bool IsCached(Stack<(Rule, int)> stack, Rule lookahead, int foundIndex)
     {
-        string key = stack.Select(entry => entry.Item1.Name + "@" + entry.Item2).Aggregate((a, b) => a + b);
+        string key = stack.Count > 0 ? stack.Select(entry => entry.Item1.Name + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
         foreach (var entry in _lookaheadCache)
         {
             if (key.StartsWith(entry.stack) && entry.signature.foundIndex == foundIndex && entry.signature.lookahead == lookahead)
