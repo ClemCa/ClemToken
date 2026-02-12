@@ -43,7 +43,7 @@ class GroupParser
                 expandAllowed = childExpandLimit;
                 expandLimit = childExpandLimit;
                 instances.Add(childTree.Value);
-                Logger.Log("Set expand limit to "+childExpandLimit);
+                Logger.Log("Set expand limit to "+childExpandLimit, depth);
             }
         }
         if (successes < group.Repeat.Item1)
@@ -109,6 +109,7 @@ class GroupParser
 
     static bool CheckChildWithExpansion(string code, int cursor, int expandAllowed, Rule child, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, int depth, Optimizations optimizations)
     {
+        Logger.Log("Checking child "+child.Name+" with expansion allowed "+expandAllowed+ $" ({code[cursor..Math.Min(cursor+10, code.Length)]})", depth);
         newCursor = cursor;
         ruleTree = null;
         expandLimit = 0;

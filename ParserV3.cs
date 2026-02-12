@@ -103,10 +103,10 @@ class Optimizations
     }
     //! Lookahead uniqueness
     private List<(string stack, (string UID, int foundIndex) signature)> _lookaheadCache = [];
-    public void CacheLookahead(Rule lookahead, int foundIndex)
+    public void CacheLookahead(Rule lookahead, int foundIndex, int depth)
     {
         string key = searchStack.Count > 0 ? searchStack.Select(entry => entry.Item1 + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
-        Logger.Log($"Caching lookahead: {lookahead.Name} at index {foundIndex} with stack {key}");
+        Logger.Log($"Caching lookahead: {lookahead.Name} at index {foundIndex} with stack {key}", depth);
         _lookaheadCache.Add((key, (lookahead.UID, foundIndex)));
     }
     private void ClearLookahead()
@@ -300,7 +300,6 @@ class AntiCompute()
             List<(string, int)> sequence = stackList.Take(matchIndex).ToList();
             if (sequence.Count == 0)
             {
-                Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
                 return false;
             }
             if (sequence.Count >= optimizations.SearchStackDepth / 2)
@@ -329,7 +328,6 @@ class AntiCompute()
             }
             if (hasRepeat)
             {
-                Logger.Warning($"Detected circular recursion on rule {rule.Name} at cursor {cursor}, aborting this path to avoid infinite recursion.");
                 return false;
             }
             optimizations.PushSearch(rule, cursor);
@@ -916,13 +914,13 @@ class ParserV3
                         {
                             continue;
                         }
-                        foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, optimizations);
+                        foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, optimizations, depth);
                         if (foundIndex != -1) break;
                     }
                 }
                 else
                 {
-                    foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, optimizations);
+                    foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, optimizations, depth);
                 }
                 Logger.Log($"> Lookahead {lookahead.Name} ({lookahead.Value}) on {code[cursor..(foundIndex == -1 ? code.Length : foundIndex)]}", depth);
                 if (foundIndex != -1)
@@ -937,7 +935,7 @@ class ParserV3
                 throw new NotSupportedException($"Rule type {rule.GetType().Name} is not supported.");
         }
     }
-    static int LookaheadLookup(string code, int startIndex, int endIndex, Rule lookahead, Optimizations optimizations)
+    static int LookaheadLookup(string code, int startIndex, int endIndex, Rule lookahead, Optimizations optimizations, int depth)
     {
         int index = -1;
         while (index == -1 && startIndex < endIndex)
@@ -950,7 +948,7 @@ class ParserV3
                 index = -1;
                 continue;
             }
-            optimizations.CacheLookahead(lookahead, index);
+            optimizations.CacheLookahead(lookahead, index, depth);
         }
         return index;
     }
