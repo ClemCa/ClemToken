@@ -185,6 +185,7 @@ namespace ClemToken
                 case 0:
                     Simple s = rule is Simple simple ? simple : new();
                     s.Value = Mirror(s.Value ?? "", bytes);
+                    s.Repeat = (1, 1);
                     rule = s;
                     break;
                 case 1:
@@ -194,6 +195,7 @@ namespace ClemToken
                         r.Value = $"[{r.Name}]";
                     r.Children = [];
                     r.Ignored = Mirror(r.Ignored, bytes);
+                    r.Repeat = (1, 1);
                     return r;
                 case 2:
                     Group g = rule is Group group ? group : new();
@@ -217,17 +219,20 @@ namespace ClemToken
                     Anchor a = rule is Anchor anchor ? anchor : new();
                     a.Name = Mirror(a.Name, bytes);
                     a.Ignored = Mirror(a.Ignored, bytes);
+                    a.Repeat = (1, 1);
                     rule = a;
                     goto children; // anchor does not have extra data
                 case 5:
                     Optional o = rule is Optional optional ? optional : new();
                     o.Ignored = Mirror(o.Ignored, bytes);
+                    o.Repeat = (1, 1);
                     rule = o;
                     goto children; // optional does not have extra data
                 case 6:
                     Lookahead l = rule is Lookahead lookahead ? lookahead : new();
                     l.Value = Mirror(l.Value ?? "", bytes);
                     l.Optional = Mirror(l.Optional, bytes);
+                    l.Repeat = (1, 1);
                     if (l.Optional)
                     {
                         int optionalChildren = l.Children?.Length ?? 0;

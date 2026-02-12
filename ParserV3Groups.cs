@@ -12,6 +12,7 @@ class GroupParser
         if (group.Repeat.Item1 == 0 && group.Repeat.Item2 == 0)
         {
             expandLimit = expandAllowed;
+            Logger.Warning("Empty group "+group.Name, depth);
             return true;
         }
         List<Tree> instances = [];
@@ -21,6 +22,7 @@ class GroupParser
             {
                 if (i < group.Repeat.Item1)
                 {
+                    Logger.Log("Failed to match group "+group.Name+" at least "+group.Repeat.Item1+" times", depth);
                     return false;
                 }
                 break;
@@ -46,8 +48,10 @@ class GroupParser
         }
         if (successes < group.Repeat.Item1)
         {
+            Logger.Log("Failed to match group "+group.Name+" at least "+group.Repeat.Item1+" times", depth);
             return false;
         }
+        Logger.Log("Matched group "+group.Name+" "+successes+" times", depth);
         Logger.Log("expand limit: "+expandLimit, depth);
         if (instances.Count == 0)
         {
