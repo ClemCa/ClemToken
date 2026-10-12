@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ClemToken
@@ -102,8 +103,8 @@ namespace ClemToken
             }
             var text = File.ReadAllText(file);
             int test = 0;
-            string generate_log = "";
-            Logger.RawOutput += (msg) => { generate_log += msg + "\n"; };
+            StringBuilder generate_log = new();
+            Logger.RawOutput += (msg) => { generate_log.Append(msg).Append('\n'); };
             while (!string.IsNullOrWhiteSpace(text))
             {
                 test++;
@@ -120,7 +121,7 @@ namespace ClemToken
                     Console.WriteLine($"Test {test} failed: {e.Message}");
                 }
             }
-            File.WriteAllText("generate_log.txt", generate_log);
+            File.WriteAllText("generate_log.txt", generate_log.ToString());
         }
 
         static void DetailedComparison(Rule rule, TestingTree tree, int step = 0)

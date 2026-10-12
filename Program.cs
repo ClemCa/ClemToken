@@ -1,4 +1,6 @@
-﻿namespace ClemToken
+﻿using System.Text;
+
+namespace ClemToken
 {
     public static class Utils
     {
@@ -151,8 +153,8 @@
                     Console.WriteLine("Specs: " + specs.Length);
                     Console.WriteLine("Rules: " + rules.Length);
                     Console.WriteLine("Text: " + text);
-                    string log_out = "";
-                    Logger.RawOutput += (log) => { log_out += log + "\n"; };
+                    StringBuilder log_out = new();
+                    Logger.RawOutput += (log) => { log_out.Append(log).Append('\n'); };
                     foreach (var rule in rules)
                     {
                         Console.WriteLine($" - {rule.Name}");
@@ -160,7 +162,7 @@
                     try
                     {
                         result = ParserV3.Parse(text, rules, specs);
-                        File.WriteAllText("parse_log.txt", log_out);
+                        File.WriteAllText("parse_log.txt", log_out.ToString());
                     }
                     catch (Exception e)
                     {
