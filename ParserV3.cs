@@ -59,9 +59,77 @@ class SpecStore
 
 class Optimizations
 {
+    //! Retroactive cache journal
+    // A demanded repeat re-run happens after the demanded node already returned, so the caches it
+    // wrote during the lower-demand attempt are still live. Rolling back to a checkpoint taken
+    // before that attempt (then recomputing at the higher demand) is what keeps them from shadowing
+    // the new attempt. Entries are only final once DefinitiveProgression commits them.
+    public readonly record struct Checkpoint(int Invalidated, int Lookahead, int Stack);
+
+    private List<((string UID, int Cursor) key, bool hadPrevious, int previousDemand)> _invalidatedJournal = [];
+    private List<(int index, (string stack, (string UID, int foundIndex) signature) entry, bool added)> _lookaheadJournal = [];
+
+    public Checkpoint Mark() => new(_invalidatedJournal.Count, _lookaheadJournal.Count, searchStack.Count);
+
+    public void Rollback(Checkpoint checkpoint)
+    {
+        if (checkpoint.Invalidated > _invalidatedJournal.Count || checkpoint.Lookahead > _lookaheadJournal.Count)
+        {
+            return; // the checkpoint was already committed away, nothing to undo
+        }
+        for (int i = _invalidatedJournal.Count - 1; i >= checkpoint.Invalidated; i--)
+        {
+            var (key, hadPrevious, previousDemand) = _invalidatedJournal[i];
+            if (hadPrevious)
+            {
+                _invalidated[key] = previousDemand;
+            }
+            else
+            {
+                _invalidated.Remove(key);
+            }
+        }
+        _invalidatedJournal.RemoveRange(checkpoint.Invalidated, _invalidatedJournal.Count - checkpoint.Invalidated);
+        for (int i = _lookaheadJournal.Count - 1; i >= checkpoint.Lookahead; i--)
+        {
+            var (index, entry, added) = _lookaheadJournal[i];
+            if (added)
+            {
+                _lookaheadCache.RemoveAt(index);
+            }
+            else
+            {
+                _lookaheadCache.Insert(index, entry);
+            }
+        }
+        _lookaheadJournal.RemoveRange(checkpoint.Lookahead, _lookaheadJournal.Count - checkpoint.Lookahead);
+        while (searchStack.Count > checkpoint.Stack)
+        {
+            searchStack.Pop();
+        }
+    }
+
+    public void CommitAll()
+    {
+        _invalidatedJournal.Clear();
+        _lookaheadJournal.Clear();
+    }
+
     public void DefinitiveProgression(int cursor)
     {
-        _invalidated.RemoveWhere(entry => entry.Item2 < cursor);
+        CommitAll();
+        List<(string UID, int Cursor)> staleInvalidated = [];
+        foreach (var entry in _invalidated)
+        {
+            if (entry.Key.Cursor < cursor)
+            {
+                staleInvalidated.Add(entry.Key);
+            }
+        }
+        foreach (var key in staleInvalidated)
+        {
+            _invalidated.Remove(key);
+        }
         for (int i = _lookaheadCache.Count - 1; i >= 0; i--)
         {
             if (_lookaheadCache[i].signature.foundIndex < cursor)
@@ -92,14 +160,31 @@ class Optimizations
         ClearLookahead();
     }
     //! Preemptive invalidation
-    private HashSet<(string, int)> _invalidated = new();
-    public void Invalidate(Rule rule, int cursor)
+    // Stores the *minimal* demand at which (rule, cursor) is known to fail. Failure is monotone in
+    // demand (requiring more passes is strictly harder), so a failure recorded at demand d is safely
+    // reusable for any demand >= d.
+    private Dictionary<(string UID, int Cursor), int> _invalidated = new();
+    public void Invalidate(Rule rule, int cursor, int demand = 0)
     {
-        _invalidated.Add((rule.UID, cursor));
+        var key = (rule.UID, cursor);
+        if (_invalidated.TryGetValue(key, out var existing))
+        {
+            if (existing <= demand)
+            {
+                return; // already known to fail at (at most) this demand
+            }
+            _invalidatedJournal.Add((key, true, existing));
+            _invalidated[key] = demand;
+        }
+        else
+        {
+            _invalidatedJournal.Add((key, false, 0));
+            _invalidated[key] = demand;
+        }
     }
-    public bool IsInvalidated(Rule rule, int cursor)
+    public bool IsInvalidated(Rule rule, int cursor, int demand = 0)
     {
-        return _invalidated.Contains((rule.UID, cursor));
+        return _invalidated.TryGetValue((rule.UID, cursor), out var failingDemand) && failingDemand <= demand;
     }
     //! Lookahead uniqueness
     private List<(string stack, (string UID, int foundIndex) signature)> _lookaheadCache = [];
@@ -107,6 +192,7 @@ class Optimizations
     {
         string key = searchStack.Count > 0 ? searchStack.Select(entry => entry.Item1 + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
         Logger.Log($"Caching lookahead: {lookahead.Name} at index {foundIndex} with stack {key}", depth);
+        _lookaheadJournal.Add((_lookaheadCache.Count, (key, (lookahead.UID, foundIndex)), true));
         _lookaheadCache.Add((key, (lookahead.UID, foundIndex)));
     }
     private void ClearLookahead()
@@ -117,6 +203,7 @@ class Optimizations
             // strictly longer so it's only children
             if (_lookaheadCache[i].stack.Length > key.Length && _lookaheadCache[i].stack.StartsWith(key))
             {
+                _lookaheadJournal.Add((i, _lookaheadCache[i], false));
                 _lookaheadCache.RemoveAt(i);
             }
         }
@@ -133,6 +220,25 @@ class Optimizations
         }
         return false;
     }
+}
+
+//! one step of delayed consumption: grow the match that produced a slack by exactly one repetition
+//! pass, returning the new end state and the next step's slack. built by the repeat that owns the
+//! slack and forwarded (re-framed) by references/anchors/optionals, so a failing following sibling
+//! demands on the same path instead of re-running or searching alternatives.
+readonly record struct ExtendResult(bool Ok, int Cursor, int ExpandLimit, int ExpandedBy, Tree? Tree, Slack Slack)
+{
+    public static ExtendResult Fail => new(false, 0, 0, 0, null, Slack.None);
+}
+
+//! Delayed expansion budget a match can still give back:
+// Passes = extra repetitions a variable repeat can still take, Chars = characters a name/greedy
+// token can still absorb, More = the one-step continuation above. Consumed lazily by the caller
+// (and demanded one step at a time by a failing following sibling) instead of being spent up front.
+readonly record struct Slack(int Passes, int Chars, Func<ExtendResult>? More = null)
+{
+    public static Slack None => new(0, 0);
+    public bool HasPasses => More != null;
 }
 
 abstract class Checker
@@ -525,6 +631,103 @@ class ParserV3
         target.Token.Value = code[target.Token.Line..(target.Token.Line + target.Token.Value.Length + by)];
         return target;
     }
+
+    //! re-frame a slack continuation for a reference: the extended tree is the referenced rule's, so it
+    //! needs the same renaming/ignored treatment as the first match, without re-running that rule
+    static Slack WrapReferenceSlack(Slack inner, Rule referenceRule, Reference reference)
+    {
+        if (inner.More == null)
+        {
+            return inner;
+        }
+        return inner with
+        {
+            More = () =>
+            {
+                var r = inner.More!();
+                if (!r.Ok)
+                {
+                    return r;
+                }
+                Tree? tree = r.Tree;
+                if (tree.HasValue)
+                {
+                    var val = tree.Value;
+                    if (referenceRule.Ignored == true)
+                    {
+                        val.Token.Ignored = true;
+                    }
+                    if (reference.Value != null && !reference.Value.Contains('@'))
+                    {
+                        val.Token.Name = reference.Value;
+                    }
+                    tree = val;
+                }
+                return r with { Tree = tree, Slack = WrapReferenceSlack(r.Slack, referenceRule, reference) };
+            }
+        };
+    }
+
+    //! same for an optional: unwrap the temp group's single child and re-apply ignored
+    static Slack WrapOptionalSlack(Slack inner, bool ignored)
+    {
+        if (inner.More == null)
+        {
+            return inner;
+        }
+        return inner with
+        {
+            More = () =>
+            {
+                var r = inner.More!();
+                if (!r.Ok)
+                {
+                    return r;
+                }
+                Tree? tree = null;
+                if (r.Tree.HasValue && r.Tree.Value.Children.Count > 0)
+                {
+                    tree = r.Tree.Value.Children[0];
+                }
+                if (ignored && tree.HasValue)
+                {
+                    var ct = tree.Value;
+                    ct.Token.Ignored = true;
+                    tree = ct;
+                }
+                return r with { Tree = tree, Slack = WrapOptionalSlack(r.Slack, ignored) };
+            }
+        };
+    }
+
+    //! same for a simple-with-children: re-prepend its literal span to the extended tree's token
+    static Slack WrapSimpleSlack(Slack inner, string code, int line)
+    {
+        if (inner.More == null)
+        {
+            return inner;
+        }
+        return inner with
+        {
+            More = () =>
+            {
+                var r = inner.More!();
+                if (!r.Ok)
+                {
+                    return r;
+                }
+                Tree? tree = r.Tree;
+                if (tree.HasValue)
+                {
+                    var rt = tree.Value;
+                    rt.Token.Value = code[line..r.Cursor] + rt.Token.Value;
+                    rt.Token.Line = line;
+                    tree = rt;
+                }
+                return r with { Tree = tree, Slack = WrapSimpleSlack(r.Slack, code, line) };
+            }
+        };
+    }
     static Tree CleanIgnored(Tree tree)
     {
         if (tree.Children.Count == 0)
@@ -594,7 +797,7 @@ class ParserV3
                 cursor++;
                 continue;
             }
-            if (Match(code, cursor, rules, specStore, referenceStore, out Tree? foundTree, out int newCursor, out int matchExpandLimit, optimizations))
+            if (Match(code, cursor, rules, specStore, referenceStore, out Tree? foundTree, out int newCursor, out int matchExpandLimit, out Slack matchSlack, optimizations))
             {
                 cursor = newCursor;
                 expandLimit = matchExpandLimit;
@@ -602,7 +805,27 @@ class ParserV3
                 if (foundTree == null)
                     continue;
                 tree.Children.Add(foundTree.Value);
-                expandLimit = matchExpandLimit;
+                //! consume the match's slack one step at a time: at top level nothing follows to demand
+                //! it, so this loop drives the continuation until nothing more can be consumed
+                Slack lastSlack = matchSlack;
+                while (lastSlack.More != null)
+                {
+                    var extensionCheckpoint = optimizations.Mark();
+                    var extended = lastSlack.More();
+                    if (extended.Ok && extended.Tree.HasValue && extended.Cursor > cursor)
+                    {
+                        cursor = extended.Cursor;
+                        tree.Children[^1] = extended.Tree.Value;
+                        expandLimit = extended.ExpandLimit;
+                        lastSlack = extended.Slack;
+                        optimizations.DefinitiveProgression(cursor);
+                    }
+                    else
+                    {
+                        optimizations.Rollback(extensionCheckpoint);
+                        break;
+                    }
+                }
             }
             else
             {
@@ -635,9 +858,10 @@ class ParserV3
     }
 
 
-    static bool Match(string code, int cursor, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, out Tree? foundTree, out int newCursor, out int expandLimit, Optimizations optimizations)
+    static bool Match(string code, int cursor, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, out Tree? foundTree, out int newCursor, out int expandLimit, out Slack slack, Optimizations optimizations)
     {
         newCursor = cursor; // No match found, return the original 
+        slack = Slack.None;
         foreach (var rule in rules)
         {
             // check if current call stack is near stack overflow
@@ -649,7 +873,7 @@ class ParserV3
             {
                 throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
             }
-            if (Check(code, cursor, 0, rule, specStore, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit, out int expandedBy, optimizations))
+            if (Check(code, cursor, 0, rule, specStore, referenceStore, out int ruleCursor, out Tree? ruleTree, out expandLimit, out int expandedBy, out slack, optimizations))
             {
                 Logger.Log($"Matched rule {rule} {rule.Name} at cursor: {cursor} size: {cursor - ruleCursor}");
                 newCursor = ruleCursor;
@@ -661,14 +885,16 @@ class ParserV3
             Logger.Log($"Failed to match rule {rule} {rule.Name} at cursor: {cursor}");
         }
         expandLimit = 0;
+        slack = Slack.None;
         foundTree = null; // No match found
         return false; // No match found
     }
 
-    internal static bool Check(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, Optimizations optimizations, int depth = 0)
+    internal static bool Check(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, out Slack slack, Optimizations optimizations, int depth = 0)
     {
         newCursor = cursor;
         expandLimit = 0;
+        slack = Slack.None;
         switch (rule)
         {
             case Anchor anchor:
@@ -679,7 +905,7 @@ class ParserV3
                     ruleTree = null;
                     return true;
                 }
-                bool res = GroupParser.CheckGroup(code, cursor, expandAllowed, anchor, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth, specStore, referenceStore, optimizations);
+                bool res = GroupParser.CheckGroup(code, cursor, expandAllowed, anchor, out newCursor, out ruleTree, out expandLimit, out expandedBy, out slack, depth, specStore, referenceStore, optimizations);
                 if (res) {
                     Logger.Log($"Anchor matched: {anchor.Name} at cursor {cursor}->{newCursor} +{expandLimit}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                 }
@@ -694,7 +920,7 @@ class ParserV3
                 {
                     tempGroup.Name = optional.Name + "_" + i;
                     tempGroup.Children[0] = optional.Children[i]; // only child set here to avoid reallocation
-                    if (GroupParser.CheckGroup(code, cursor, expandAllowed, tempGroup, out newCursor, out var optionalRuleTree, out expandLimit, out expandedBy, depth + 1, specStore, referenceStore, optimizations))
+                    if (GroupParser.CheckGroup(code, cursor, expandAllowed, tempGroup, out newCursor, out var optionalRuleTree, out expandLimit, out expandedBy, out slack, depth + 1, specStore, referenceStore, optimizations))
                     {
                         Logger.Log($"Optional matched without expansion: {optional.Name} ({optional.Value}) at cursor {cursor}, for {optional.Children[i].Name} ({optional.Children[i].Value}): ({optionalRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
                         ruleTree = optionalRuleTree?.Children[0] ?? null; // unwrap the group
@@ -705,6 +931,7 @@ class ParserV3
                             ct.Token.Ignored = true;
                             ruleTree = ct;
                         }
+                        slack = WrapOptionalSlack(slack, optional.Ignored);
                         return true;
                     }
                     else
@@ -715,6 +942,7 @@ class ParserV3
                 expandLimit = expandAllowed;
                 newCursor = cursor;
                 expandedBy = 0;
+                slack = Slack.None;
                 ruleTree = null;
                 return false;
             case Simple simple:
@@ -723,6 +951,7 @@ class ParserV3
                     throw new Exception("Empty simple rule");
                 }
                 expandedBy = 0;
+                slack = Slack.None;
                 for (int i = 0; i < simple.Value.Length; i++)
                 {
                     if (cursor + i >= code.Length || code[cursor + i] != simple.Value[i])
@@ -739,7 +968,7 @@ class ParserV3
                     {
                         UID = simple.UID // preserve UID for optimizations
                     };
-                    bool groupSuccess = GroupParser.CheckGroup(code, newCursor, 0, fakeGroup, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth + 1, specStore, referenceStore, optimizations);
+                    bool groupSuccess = GroupParser.CheckGroup(code, newCursor, 0, fakeGroup, out newCursor, out ruleTree, out expandLimit, out expandedBy, out slack, depth + 1, specStore, referenceStore, optimizations);
                     if (!groupSuccess) {
                         ruleTree = null;
                         return false; // if the group doesn't match, the simple doesn't match, even if the string does
@@ -752,6 +981,7 @@ class ParserV3
                         rt.Token.Line = cursor;
                         ruleTree = rt;
                     }
+                    slack = WrapSimpleSlack(slack, code, cursor);
                 } else {
                     ruleTree = new Tree(new Token(simple.Name, simple.Value, cursor, newCursor, simple.Ignored), []);
                 }
@@ -801,6 +1031,7 @@ class ParserV3
                             }
                             expandLimit = Math.Max(0, maxCursor - newCursor);
                         }
+                        slack = new Slack(0, expandLimit);
                         Logger.Log($"Name regex match: {nameRgx} against '{code[cursor..(newCursor + expandLimit)]}' with expand limit {expandLimit}");
                         return true;
                     case "greedy": // like a name, but once it latches on it expands to the end of the file
@@ -812,6 +1043,7 @@ class ParserV3
                         newCursor = cursor + 1; // just one for the minimum
                         ruleTree = new Tree(new Token("greedy", code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
                         expandLimit = code.Length - newCursor; // expand to the end of the file
+                        slack = new Slack(0, expandLimit);
                         return true;
                     case "digit":
                         Checker digitRgx = specStore.GetSpec("digit", @"[0-9]");
@@ -839,13 +1071,14 @@ class ParserV3
                                 maxCursor++;
                             }
                             expandLimit = Math.Max(0, maxCursor - newCursor);
+                            slack = new Slack(0, expandLimit);
                             ruleTree = new Tree(new Token(reserved.Name, code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
                             return true;
                         }
                         throw new NotSupportedException($"Reserved rule '{reserved.Name}' is not supported. If it's a custom spec, make sure it is defined.");
                 }
             case Group group:
-                return GroupParser.CheckGroup(code, cursor, expandAllowed, group, out newCursor, out ruleTree, out expandLimit, out expandedBy, depth, specStore, referenceStore, optimizations);
+                return GroupParser.CheckGroup(code, cursor, expandAllowed, group, out newCursor, out ruleTree, out expandLimit, out expandedBy, out slack, depth, specStore, referenceStore, optimizations);
             case Reference reference:
                 if (reference.Children.Length > 0)
                 {
@@ -874,12 +1107,17 @@ class ParserV3
                     return false; // already studied this rule at this cursor, avoid infinite recursion
                 }
                 Logger.Log($"@> Reference {reference.Name} to {referenceRule.Name}", depth);
-                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, out expandedBy, optimizations, depth + 1);
+                var cacheCheckpoint = optimizations.Mark();
+                bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, out expandedBy, out Slack innerSlack, optimizations, depth + 1);
+                bool checkFailed = !success;
+                slack = innerSlack;
                 if (!success && reference.Repeat.Item1 == 0)
                 {
                     success = true;
                     ruleOutput = null;
+                    slack = Slack.None;
                 }
+                slack = WrapReferenceSlack(slack, referenceRule, reference);
                 if (ruleOutput.HasValue)
                 {
                     var val = ruleOutput.Value;
@@ -889,8 +1127,12 @@ class ParserV3
                         val.Token.Name = reference.Value;
                     ruleOutput = val;
                 }
+                if (checkFailed)
+                {
+                    optimizations.Rollback(cacheCheckpoint); // drop the failed attempt's speculative entries
+                }
                 AntiCompute.Finished(optimizations, referenceRule, cursor);
-                if (!success)
+                if (checkFailed)
                 {
                     optimizations.Invalidate(referenceRule, cursor);
                 }

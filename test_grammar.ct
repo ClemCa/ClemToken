@@ -36,7 +36,7 @@ $comment_escape:simple: \\
 @boolean: [true | false]
 
 ### NUMBERS
-@number: [@integer | @float]
+@number: [@float | @integer]
 @integer: ($$[digit]):+
 @float: @integer . @integer
 
