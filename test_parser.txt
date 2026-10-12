@@ -634,3 +634,27 @@ myFunc(42);
         )
     )
 )
+mark;
+(
+    Name: Root
+    (
+        Name: statement
+        Value: mark;
+        (
+            Name: plain
+            Value: mark
+            (
+                Name: identifier
+                Value: mark
+                (
+                    Name: name
+                    Value: mark
+                )
+            )
+        )
+        (
+            Name: ;
+            Value: ;
+        )
+    )
+)

@@ -106,6 +106,7 @@ class Optimizations
         while (searchStack.Count > checkpoint.Stack)
         {
             searchStack.Pop();
+            _stackKeys.RemoveAt(_stackKeys.Count - 1);
         }
     }
 
@@ -140,8 +141,13 @@ class Optimizations
     }
     //! Search stack
     private Stack<(string UID, int cursor)> searchStack = new();
+    //! StackKey() is read on every lookahead probe, so the key is kept one entry per depth instead of
+    //! rebuilt from scratch (O(depth^2) per probe). It reads outermost-first, making StartsWith an
+    //! ancestor test; each frame ends with a separator so cursors cannot prefix-match (1 vs 10).
+    private List<string> _stackKeys = new();
     public int SearchStackDepth => searchStack.Count;
     public IEnumerable<(string UID, int cursor)> SearchStack => searchStack;
+    private string StackKey() => _stackKeys.Count > 0 ? _stackKeys[^1] : "";
     public IEnumerable<(Rule rule, int cursor)> SearchStackResolved(Rule[] rules)
     {
         return searchStack.Select(entry => (rules.First(r => r.UID == entry.UID), entry.cursor));
@@ -149,6 +155,8 @@ class Optimizations
     public void PushSearch(Rule rule, int cursor)
     {
         searchStack.Push((rule.UID, cursor));
+        string frame = $"{rule.UID}@{cursor}|";
+        _stackKeys.Add(_stackKeys.Count == 0 ? frame : _stackKeys[^1] + frame);
     }
     public (string UID, int cursor) PeekSearch()
     {
@@ -157,6 +165,7 @@ class Optimizations
     public void PopSearch()
     {
         searchStack.Pop();
+        _stackKeys.RemoveAt(_stackKeys.Count - 1);
         ClearLookahead();
     }
     //! Preemptive invalidation
@@ -190,14 +199,14 @@ class Optimizations
     private List<(string stack, (string UID, int foundIndex) signature)> _lookaheadCache = [];
     public void CacheLookahead(Rule lookahead, int foundIndex, int depth)
     {
-        string key = searchStack.Count > 0 ? searchStack.Select(entry => entry.Item1 + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
+        string key = StackKey();
         Logger.Log($"Caching lookahead: {lookahead.Name} at index {foundIndex} with stack {key}", depth);
         _lookaheadJournal.Add((_lookaheadCache.Count, (key, (lookahead.UID, foundIndex)), true));
         _lookaheadCache.Add((key, (lookahead.UID, foundIndex)));
     }
     private void ClearLookahead()
     {
-        string key = searchStack.Count > 0 ? searchStack.Select(entry => entry.Item1 + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
+        string key = StackKey();
         for (int i = _lookaheadCache.Count - 1; i >= 0; i--)
         {
             // strictly longer so it's only children
@@ -210,7 +219,7 @@ class Optimizations
     }
     public bool IsCached(Rule lookahead, int foundIndex)
     {
-        string key = searchStack.Count > 0 ? searchStack.Select(entry => entry.Item1 + "@" + entry.Item2).Aggregate((a, b) => a + b) : "";
+        string key = StackKey();
         foreach (var entry in _lookaheadCache)
         {
             if (key.StartsWith(entry.stack) && entry.signature.foundIndex == foundIndex && entry.signature.UID == lookahead.UID)

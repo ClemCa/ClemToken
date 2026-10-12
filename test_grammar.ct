@@ -9,7 +9,7 @@ $comment_end:simple: */
 $comment_escape:simple: \\
 
 # MAIN
-@statement: [@import | @declaration | @call] ;
+@statement: [@import | @declaration | @call | @guarded | @plain] ;
 
 ## STATEMENTS
 @import: import @identifier (. @identifier)* from @identifier
@@ -44,3 +44,14 @@ $comment_escape:simple: \\
 # BASIC
 @identifier: $[name]
 @type: $[name]
+
+# LOOKAHEAD
+# a regression case for the lookahead cache: @outer probes @>mark at a shallower search stack
+# than @inner. the stack key must read outermost-first so @inner sees @outer's cached entry, skips
+# the only "mark" and fails, letting @guarded fall through to @plain. under the old top-first key
+# @inner missed the ancestor entry and @guarded matched instead.
+@guarded: @outer
+@outer: @>mark @inner
+@inner: @>mark @leaf
+@leaf: @identifier
+@plain: @identifier
