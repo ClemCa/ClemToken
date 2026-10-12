@@ -11,6 +11,12 @@ class GroupParser
         public Slack Slack;
     }
 
+    //! scratch stacks reused across resolutions. ResolveFrom pops back to empty before it returns, so a
+    //! handed-back pair is always clean (a nested group simply rents another pair). per-thread so
+    //! concurrent parses stay independent
+    [ThreadStatic] static Stack<List<Tree>>? _scratchTrees;
+    [ThreadStatic] static Stack<List<ChildSlot>>? _scratchSlots;
+
     internal static bool CheckGroup(string code, int cursor, int expandAllowed, Rule group, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, out Slack slack, int depth, SpecStore specStore, ReferenceStore referenceStore, Optimizations optimizations)
     {
         newCursor = cursor;
@@ -33,7 +39,8 @@ class GroupParser
 
         //! entries written while matching this group stay journaled so a demanded re-run can roll them back
         var checkpoint = optimizations.Mark();
-        List<Tree> instances = [];
+        //! exact size for the guaranteed passes: List<T> would otherwise grow to its default capacity of 4
+        List<Tree> instances = new(min);
         int successes = 0;
         Slack carried = Slack.None;
         int currentExpandAllowed = expandAllowed;
@@ -115,7 +122,9 @@ class GroupParser
             {
                 return ExtendResult.Fail;
             }
-            var newInst = new List<Tree>(inst);
+            //! one slot for the pass we are about to append, so the copy does not trigger a growth realloc
+            var newInst = new List<Tree>(inst.Count + 1);
+            newInst.AddRange(inst);
             int newExpBy = expBy;
             int newExpLimit = expLimit;
             int newExpandAll = expandAll;
@@ -182,13 +191,27 @@ class GroupParser
         int groupStart = cursor;
         int groupStartExpand = expandAllowed;
 
-        if (!ResolveFrom(0, cursor, expandAllowed, [], [], out newCursor, out expandLimit, out expandedBy, out slack, out List<Tree> children))
+        var treePool = _scratchTrees ??= new();
+        var slotPool = _scratchSlots ??= new();
+        List<Tree> scratchTrees = treePool.Count > 0 ? treePool.Pop() : [];
+        List<ChildSlot> scratchSlots = slotPool.Count > 0 ? slotPool.Pop() : [];
+        try
         {
-            return false;
+            if (!ResolveFrom(0, cursor, expandAllowed, scratchTrees, scratchSlots, out newCursor, out expandLimit, out expandedBy, out slack, out List<Tree> children))
+            {
+                return false;
+            }
+            int start = children.Count > 0 ? children[0].Token.Line : cursor;
+            ruleTree = new Tree(new Token(group.Name, code[start..newCursor], start, 0, group.Ignored), children);
+            return true;
         }
-        int start = children.Count > 0 ? children[0].Token.Line : cursor;
-        ruleTree = new Tree(new Token(group.Name, code[start..newCursor], start, 0, group.Ignored), children);
-        return true;
+        finally
+        {
+            scratchTrees.Clear();
+            scratchSlots.Clear();
+            treePool.Push(scratchTrees);
+            slotPool.Push(scratchSlots);
+        }
 
         //! resolve children left to right: when a following sibling fails, extend this child one step
         //! through its own slack (the same path that reported it) instead of failing
@@ -200,7 +223,8 @@ class GroupParser
                 endExpand = fromExpand;
                 endExpandedBy = 0;
                 endSlack = BuildChildrenSlack(slots, fromExpand);
-                resolved = pre;
+                //! pre is the shared scratch, snapshot it: this list becomes the group's tree children
+                resolved = [.. pre];
                 return true;
             }
             ChildSlot slot = default;
@@ -281,17 +305,25 @@ class GroupParser
                 }
                 appliedExpandedBy = childExpandedBy;
                 int localExpandedBy = appliedLocal;
-                var nextPre = new List<Tree>(pre);
-                if (childTree.HasValue)
+                //! pre/slots are the shared scratch for this resolution: push the child, recurse, pop. the
+                //! base case snapshots what it keeps, so nothing here escapes or is copied per level
+                bool pushed = childTree.HasValue;
+                if (pushed)
                 {
-                    nextPre.Add(childTree.Value);
+                    pre.Add(childTree.GetValueOrDefault());
                 }
-                var nextSlots = new List<ChildSlot>(slots) { slot };
+                slots.Add(slot);
                 //! a child that produced no tree (e.g. a repeat matching zero passes) leaves the expansion
                 //! budget untouched, so the following sibling still sees the previous allowance
-                int nextExpand = childTree.HasValue ? childExpandLimit : fromExpand;
+                int nextExpand = pushed ? childExpandLimit : fromExpand;
 
-                if (ResolveFrom(index + 1, childCursor, nextExpand, nextPre, nextSlots, out endCursor, out endExpand, out int deeperExpandedBy, out endSlack, out resolved))
+                bool reached = ResolveFrom(index + 1, childCursor, nextExpand, pre, slots, out endCursor, out endExpand, out int deeperExpandedBy, out endSlack, out resolved);
+                slots.RemoveAt(slots.Count - 1);
+                if (pushed)
+                {
+                    pre.RemoveAt(pre.Count - 1);
+                }
+                if (reached)
                 {
                     endExpandedBy = localExpandedBy + deeperExpandedBy;
                     return true;
@@ -329,7 +361,8 @@ class GroupParser
             {
                 return Slack.None;
             }
-            var captured = slots;
+            //! slots is the shared scratch, so snapshot it before it leaves this frame via the slack
+            var captured = new List<ChildSlot>(slots);
             return new Slack(1, endExpand, () => ExtendChildren(captured));
         }
 

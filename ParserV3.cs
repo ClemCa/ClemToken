@@ -749,7 +749,7 @@ class ParserV3
     static List<Tree> GetCleanedChildren(Tree tree)
     {
         // flatten
-        List<Tree> newChildren = [];
+        List<Tree> newChildren = new(tree.Children.Count);
         foreach (var child in tree.Children)
         {
             if (child.Token.Ignored)
@@ -761,7 +761,12 @@ class ParserV3
                 newChildren.Add(child);
             }
         }
-        return [.. newChildren.Select(CleanIgnored)];
+        //! clean in place: the result is this list (it becomes tree.Children), so no second list/iterator
+        for (int i = 0; i < newChildren.Count; i++)
+        {
+            newChildren[i] = CleanIgnored(newChildren[i]);
+        }
+        return newChildren;
     }
     public static Tree Parse(string code, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, Optimizations optimizations)
     {

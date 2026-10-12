@@ -2,26 +2,27 @@ using System.Text.RegularExpressions;
 
 namespace ClemToken
 {
-    interface Rule
+    abstract class Rule
     {
-        public (int, int) Repeat { get; set; }
-        public string Name { get; set; }
-        public string? Value { get; set; }
-        public bool Ignored { get; set; }
-        public Rule[] Children { get; set; }
-        public bool IsReserved { get; set; }
-        public string UID { get; set; }
+        public abstract (int, int) Repeat { get; set; }
+        public abstract string Name { get; set; }
+        public abstract string? Value { get; set; }
+        public abstract bool Ignored { get; set; }
+        public abstract Rule[] Children { get; set; }
+        public abstract bool IsReserved { get; set; }
+        public abstract string UID { get; set; }
     }
 
-    struct Simple : Rule
+    class Simple : Rule
     {
-        public (int, int) Repeat { get; set; }
-        public string Name { get; set; }
-        public string? Value { get; set; }
-        public bool Ignored { get; set; }
-        public Rule[] Children { get; set; }
-        public bool IsReserved { get; set; }
-        public string UID { get; set; }
+        public override (int, int) Repeat { get; set; }
+        public override string Name { get; set; } = null!;
+        public override string? Value { get; set; }
+        public override bool Ignored { get; set; }
+        public override Rule[] Children { get; set; } = null!;
+        public override bool IsReserved { get; set; }
+        public override string UID { get; set; } = null!;
+        public Simple() { }
         public Simple(string value)
         {
             Name = value;
@@ -34,15 +35,16 @@ namespace ClemToken
         }
     }
 
-    struct Reserved : Rule
+    class Reserved : Rule
     {
-        public (int, int) Repeat { get; set; }
-        public string Name { get; set; }
-        public string? Value { get; set; }
-        public bool Ignored { get; set; }
-        public Rule[] Children { get; set; }
-        public bool IsReserved { get; set; }
-        public string UID { get; set; }
+        public override (int, int) Repeat { get; set; }
+        public override string Name { get; set; } = null!;
+        public override string? Value { get; set; }
+        public override bool Ignored { get; set; }
+        public override Rule[] Children { get; set; } = null!;
+        public override bool IsReserved { get; set; }
+        public override string UID { get; set; } = null!;
+        public Reserved() { }
         public Reserved(string value, bool ignored = false)
         {
             int start = value.IndexOf('[');
@@ -57,15 +59,16 @@ namespace ClemToken
         }
     }
 
-    struct Reference : Rule
+    class Reference : Rule
     {
-        public (int, int) Repeat { get; set; }
-        public string Name { get; set; }
-        public string? Value { get; set; }
-        public bool Ignored { get; set; }
-        public Rule[] Children { get; set; }
-        public bool IsReserved { get; set; }
-        public string UID { get; set; }
+        public override (int, int) Repeat { get; set; }
+        public override string Name { get; set; } = null!;
+        public override string? Value { get; set; }
+        public override bool Ignored { get; set; }
+        public override Rule[] Children { get; set; } = null!;
+        public override bool IsReserved { get; set; }
+        public override string UID { get; set; } = null!;
+        public Reference() { }
         public Reference(string value, bool optional = false, string? name = null)
         {
             int start = value.IndexOf('@');
@@ -78,15 +81,16 @@ namespace ClemToken
             UID = "";
         }
     }
-    struct Anchor : Rule
+    class Anchor : Rule
     {
-        public (int, int) Repeat { get; set; }
-        public string Name { get; set; }
-        public string? Value { get; set; }
-        public bool Ignored { get; set; }
-        public Rule[] Children { get; set; }
-        public bool IsReserved { get; set; }
-        public string UID { get; set; }
+        public override (int, int) Repeat { get; set; }
+        public override string Name { get; set; } = null!;
+        public override string? Value { get; set; }
+        public override bool Ignored { get; set; }
+        public override Rule[] Children { get; set; } = null!;
+        public override bool IsReserved { get; set; }
+        public override string UID { get; set; } = null!;
+        public Anchor() { }
         public Anchor(string value, Rule[]? children = null)
         {
             Ignored = value.EndsWith("?:");
@@ -104,15 +108,19 @@ namespace ClemToken
             UID = "";
         }
     }
-    struct Optional : Rule
+    class Optional : Rule
     {
-        public (int, int) Repeat { get; set; }
-        public string Name { get; set; }
-        public string? Value { get; set; }
-        public bool Ignored { get; set; }
-        public Rule[] Children { get; set; }
-        public bool IsReserved { get; set; }
-        public string UID { get; set; }
+        public override (int, int) Repeat { get; set; }
+        public override string Name { get; set; } = null!;
+        public override string? Value { get; set; }
+        public override bool Ignored { get; set; }
+        public override Rule[] Children { get; set; } = null!;
+        public override bool IsReserved { get; set; }
+        public override string UID { get; set; } = null!;
+        //! explicit parameterless ctor: as a struct, new Optional() produced the default value
+        //! (Name/Children null) because the all-optional-parameter ctor is not used by new S().
+        //! As a class it would otherwise bind to that ctor and pre-fill Children, breaking deserialization.
+        public Optional() { }
         public Optional(Rule[]? options = null)
         {
             Name = "Optional";
@@ -123,16 +131,17 @@ namespace ClemToken
             UID = "";
         }
     }
-    struct Lookahead : Rule
+    class Lookahead : Rule
     {
-        public (int, int) Repeat { get; set; }
-        public string Name { get; set; }
-        public string? Value { get; set; }
-        public bool Ignored { get; set; }
-        public Rule[] Children { get; set; }
-        public bool IsReserved { get; set; }
+        public override (int, int) Repeat { get; set; }
+        public override string Name { get; set; } = null!;
+        public override string? Value { get; set; }
+        public override bool Ignored { get; set; }
+        public override Rule[] Children { get; set; } = null!;
+        public override bool IsReserved { get; set; }
         public bool Optional { get; set; }
-        public string UID { get; set; }
+        public override string UID { get; set; } = null!;
+        public Lookahead() { }
         public Lookahead(string value, bool optional = false)
         {
             Name = "Lookahead";
@@ -145,15 +154,16 @@ namespace ClemToken
             UID = "";
         }
     }
-    struct Group : Rule
+    class Group : Rule
     {
-        public (int, int) Repeat { get; set; }
-        public string Name { get; set; }
-        public string? Value { get; set; }
-        public bool Ignored { get; set; }
-        public Rule[] Children { get; set; }
-        public bool IsReserved { get; set; }
-        public string UID { get; set; }
+        public override (int, int) Repeat { get; set; }
+        public override string Name { get; set; } = null!;
+        public override string? Value { get; set; }
+        public override bool Ignored { get; set; }
+        public override Rule[] Children { get; set; } = null!;
+        public override bool IsReserved { get; set; }
+        public override string UID { get; set; } = null!;
+        public Group() { }
         public Group((int, int) repeat, bool ignored)
         {
             Repeat = repeat;
@@ -250,15 +260,15 @@ namespace ClemToken
         }
     }
 
-    struct Empty : Rule
+    class Empty : Rule
     {
-        public (int, int) Repeat { get; set; }
-        public string Name { get; set; }
-        public string? Value { get; set; }
-        public bool Ignored { get; set; }
-        public Rule[] Children { get; set; }
-        public bool IsReserved { get; set; }
-        public string UID { get; set; }
+        public override (int, int) Repeat { get; set; }
+        public override string Name { get; set; } = null!;
+        public override string? Value { get; set; }
+        public override bool Ignored { get; set; }
+        public override Rule[] Children { get; set; } = null!;
+        public override bool IsReserved { get; set; }
+        public override string UID { get; set; } = null!;
         public Empty()
         {
             Repeat = (0, 0);
@@ -271,13 +281,13 @@ namespace ClemToken
         }
     }
 
-    struct ProcessRule : Rule
+    class ProcessRule : Rule
     {
-        public (int, int) Repeat { get; set; }
-        public string Name { get; set; }
-        public string? Value { get; set; }
-        public bool Ignored { get; set; }
-        public Rule[] Children
+        public override (int, int) Repeat { get; set; }
+        public override string Name { get; set; } = null!;
+        public override string? Value { get; set; }
+        public override bool Ignored { get; set; }
+        public override Rule[] Children
         {
             get => [.. ProcessChildren.Select((c) => c as Rule)]; set
             {
@@ -292,14 +302,15 @@ namespace ClemToken
             })];
             }
         }
-        public ProcessRule[] ProcessChildren { get; set; }
-        public bool IsReserved { get; set; }
+        public ProcessRule[] ProcessChildren { get; set; } = null!;
+        public override bool IsReserved { get; set; }
         public int Length { get; set; }
         public bool Empty { get; set; }
         public int Line { get; set; }
         public int Column { get; set; }
-        public (string, int)[] Alternatives { get; set; }
-        public string UID { get; set; }
+        public (string, int)[] Alternatives { get; set; } = null!;
+        public override string UID { get; set; } = null!;
+        public ProcessRule() { }
         public ProcessRule(Rule rule, int length, int line, int column, (string, int)[]? alternatives = null)
         {
             Empty = rule is ProcessRule ? ((ProcessRule)rule).Empty : rule is Empty;
