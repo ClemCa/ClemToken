@@ -52,17 +52,91 @@ namespace ClemToken
             var tree = ParserV3.Parse(text, preloadedRules, preloadedSpecs);
             return new Navigator(tree);
         }
+
+        //! static grammar stats: counts and per-rule symbol bounds, no input needed
+        public static GrammarStats AnalyzeGrammar(this string grammarText)
+        {
+            var (rules, specs) = Generator.Generate(grammarText);
+            return GrammarAnalyzer.Analyze(rules, specs);
+        }
+        public static GrammarStats AnalyzeGrammarFile(this string path) => File.ReadAllText(path).AnalyzeGrammar();
+
+        //! runtime parse stats: allocations and executions attributed per rule
+        public static ParseMetrics MeasureParse(this string text, string grammarPath)
+        {
+            var (rules, specs) = Serializer.Deserialize(File.ReadAllBytes(grammarPath));
+            return Measure(text, rules, specs);
+        }
+        public static ParseMetrics MeasureParse(this string text, BinaryReader reader)
+        {
+            var (rules, specs) = Serializer.Deserialize(reader.ReadBytes((int)reader.BaseStream.Length));
+            return Measure(text, rules, specs);
+        }
+        public static ParseMetrics MeasurePreloaded(this string text)
+        {
+            if (preloadedRules == null || preloadedSpecs == null)
+            {
+                throw new InvalidOperationException("No grammar has been preloaded");
+            }
+            return Measure(text, preloadedRules, preloadedSpecs);
+        }
+        //! internal: Rule/Spec are not public, so this cannot be an outward-facing overload
+        internal static ParseMetrics Measure(string text, Rule[] rules, Spec[] specs)
+        {
+            var collector = new MetricsCollector();
+            ParserV3.Parse(text, rules, specs, collector);
+            return collector.Build();
+        }
     }
 
     class Program
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("ClemToken");
             Logger.Mode = Logger.LogMode.Error;
+
+            //! -stats is order-independent: pull it (with an optional mode/format token) out before dispatch
+            string? statsMode = null;
+            string statsFormat = "table";
+            {
+                var arguments = new List<string>(args);
+                int statsIndex = arguments.IndexOf("-stats");
+                if (statsIndex >= 0)
+                {
+                    arguments.RemoveAt(statsIndex);
+                    statsMode = "parse"; // default when no explicit mode
+                    if (statsIndex < arguments.Count && (arguments[statsIndex] == "grammar" || arguments[statsIndex] == "parse"))
+                    {
+                        statsMode = arguments[statsIndex];
+                        arguments.RemoveAt(statsIndex);
+                    }
+                    if (statsIndex < arguments.Count && arguments[statsIndex] == "json")
+                    {
+                        statsFormat = "json";
+                        arguments.RemoveAt(statsIndex);
+                    }
+                    args = [.. arguments];
+                }
+            }
+            //! keep stdout clean when it is meant to be machine-readable
+            if (statsFormat != "json")
+            {
+                Console.WriteLine("ClemToken");
+            }
+
             if (args.Length < 2)
             {
-                Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in | Tokenizer [-testG] <input> | Tokenizer [-testP] <input> <grammar>");
+                Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in | Tokenizer -f <grammar> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json] | Tokenizer [-testG] <input> | Tokenizer [-testP] <input> <grammar>");
+                return;
+            }
+            if (statsMode == "grammar")
+            {
+                if (args.Length != 2 || args[0] != "-f")
+                {
+                    Console.WriteLine("Usage: Tokenizer -f <grammar> -stats grammar [json]");
+                    return;
+                }
+                PrintStats(Utils.AnalyzeGrammarFile(args[1]), statsFormat);
                 return;
             }
             if (args[0] == "-testG")
@@ -83,6 +157,11 @@ namespace ClemToken
             if (args[0] == "-f")
             {
                 string file = args[1];
+                if (args.Length < 3)
+                {
+                    Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <grammar> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json]");
+                    return;
+                }
                 if (args[2] == "-preload")
                 {
                     if (args.Length != 3)
@@ -147,6 +226,11 @@ namespace ClemToken
                             Console.WriteLine("Usage: Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in");
                             return;
                     }
+                    if (statsMode == "parse")
+                    {
+                        PrintStats(Utils.MeasureParse(text, file), statsFormat);
+                        return;
+                    }
                     var (rules, specs) = Serializer.Deserialize(File.ReadAllBytes(file));
                     Tree result;
                     Console.WriteLine("Parsing...");
@@ -184,6 +268,18 @@ namespace ClemToken
                 Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <rule-file> -t <text>");
                 return;
             }
+        }
+
+        static void PrintStats(GrammarStats stats, string format)
+        {
+            if (format == "json") Console.Write(stats.ToJson());
+            else stats.WriteTo(Console.Out);
+        }
+
+        static void PrintStats(ParseMetrics stats, string format)
+        {
+            if (format == "json") Console.Write(stats.ToJson());
+            else stats.WriteTo(Console.Out);
         }
     }
 }

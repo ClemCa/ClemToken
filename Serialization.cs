@@ -18,7 +18,8 @@ namespace ClemToken
         //! 10: ignored anchors
         //! 11: lookaheads with sub optionals
         //! 12: ignored optionals
-        private const int Version = 12;
+        //! 13: spacing mode on rules
+        private const int Version = 13;
         public static string StringSerializeTree(Tree tree)
         {
             StringBuilder sb = new();
@@ -47,7 +48,7 @@ namespace ClemToken
         }
         public static void DisplayRule(Rule rule, StringBuilder stringBuilder, int depth = 0)
         {
-            stringBuilder.AppendLine(new string(' ', depth * 2) + rule.Name + " (" + rule.GetType().Name + ";" + rule.Value + ";" + rule.Repeat + "); ignored=" + rule.Ignored);
+            stringBuilder.AppendLine(new string(' ', depth * 2) + rule.Name + " (" + rule.GetType().Name + ";" + rule.Value + ";" + rule.Repeat + "); ignored=" + rule.Ignored + "; spacing=" + rule.Spacing);
             foreach (var child in rule.Children)
             {
                 DisplayRule(child, stringBuilder, depth + 1);
@@ -196,6 +197,7 @@ namespace ClemToken
                     r.Children = [];
                     r.Ignored = Mirror(r.Ignored, bytes);
                     r.Repeat = (1, 1);
+                    r.Spacing = (SpacingMode)Mirror((int)r.Spacing, bytes);
                     return r;
                 case 2:
                     Group g = rule is Group group ? group : new();
@@ -214,18 +216,21 @@ namespace ClemToken
                     (int, int) refRepeat = refRule.Repeat;
                     refRepeat.Item1 = Mirror(refRepeat.Item1, bytes);
                     refRule.Repeat = refRepeat;
+                    refRule.Spacing = (SpacingMode)Mirror((int)refRule.Spacing, bytes);
                     return refRule;
                 case 4:
                     Anchor a = rule is Anchor anchor ? anchor : new();
                     a.Name = Mirror(a.Name, bytes);
                     a.Ignored = Mirror(a.Ignored, bytes);
                     a.Repeat = (1, 1);
+                    a.Spacing = (SpacingMode)Mirror((int)a.Spacing, bytes);
                     rule = a;
                     goto children; // anchor does not have extra data
                 case 5:
                     Optional o = rule is Optional optional ? optional : new();
                     o.Ignored = Mirror(o.Ignored, bytes);
                     o.Repeat = (1, 1);
+                    o.Spacing = (SpacingMode)Mirror((int)o.Spacing, bytes);
                     rule = o;
                     goto children; // optional does not have extra data
                 case 6:
@@ -233,6 +238,7 @@ namespace ClemToken
                     l.Value = Mirror(l.Value ?? "", bytes);
                     l.Optional = Mirror(l.Optional, bytes);
                     l.Repeat = (1, 1);
+                    l.Spacing = (SpacingMode)Mirror((int)l.Spacing, bytes);
                     if (l.Optional)
                     {
                         int optionalChildren = l.Children?.Length ?? 0;
@@ -250,6 +256,7 @@ namespace ClemToken
                     throw new Exception($"Unknown rule type: {rule.GetType().Name} ({type})");
             }
             rule.Name = Mirror(rule.Name ?? "", bytes);
+            rule.Spacing = (SpacingMode)Mirror((int)rule.Spacing, bytes);
         children:
             int children = rule.Children?.Length ?? 0;
             children = Mirror(children, bytes);

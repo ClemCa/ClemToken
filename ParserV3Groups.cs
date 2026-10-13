@@ -425,7 +425,7 @@ class GroupParser
             {
                 return false;
             }
-            if (char.IsWhiteSpace(code[targetCursor]) && (regularExpansion == 0 || regularExpansion >= expandAllowed)) // can only expand whitespace before or after a token
+            if (!optimizations.ExplicitSpacing && char.IsWhiteSpace(code[targetCursor]) && (regularExpansion == 0 || regularExpansion >= expandAllowed)) // can only expand whitespace before or after a token
             {
                 targetCursor++;
                 expanded++;

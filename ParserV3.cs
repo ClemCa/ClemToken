@@ -59,6 +59,13 @@ class SpecStore
 
 class Optimizations
 {
+    //! optional per-parse metrics sink; null when profiling is off, so the Check wrapper stays free
+    public MetricsCollector? Metrics;
+
+    //! current scope's spacing mode: true means implicit whitespace skipping is disabled. Set and
+    //! restored around each rule check, so it always reflects the enclosing scope during a check.
+    public bool ExplicitSpacing;
+
     //! Retroactive cache journal
     // A demanded repeat re-run happens after the demanded node already returned, so the caches it
     // wrote during the lower-demand attempt are still live. Rolling back to a checkpoint taken
@@ -463,8 +470,9 @@ class AntiCompute()
     
 class ParserV3
 {
-    public static Tree Parse(string code, Rule[] rules, Spec[] specs)
+    public static Tree Parse(string code, Rule[] rules, Spec[] specs, MetricsCollector? metrics = null)
     {
+        metrics?.Start();
         ReferenceStore referenceStore = new();
         if (string.IsNullOrEmpty(rules[0].UID))
         {
@@ -489,7 +497,11 @@ class ParserV3
         string cleanedCode = CleanSource(specs, code);
         Logger.Log("Cleaned source:\n" + cleanedCode);
         Logger.Log("--------------------------------------------------");
-        Optimizations optimizations = new();
+        Optimizations optimizations = new()
+        {
+            Metrics = metrics,
+            ExplicitSpacing = specStore.GetSpecDefinition("spacing", "implicit").Trim().Equals("explicit", StringComparison.OrdinalIgnoreCase)
+        };
         AntiCompute.ApplySpecs(specStore);
         try
         {
@@ -805,7 +817,7 @@ class ParserV3
         int expandLimit = 0;
         while (cursor < code.Length)
         {
-            if (char.IsWhiteSpace(code[cursor]))
+            if (!optimizations.ExplicitSpacing && char.IsWhiteSpace(code[cursor]))
             {
                 // Skip whitespace in-between rules
                 cursor++;
@@ -843,7 +855,7 @@ class ParserV3
             }
             else
             {
-                if (char.IsWhiteSpace(code[cursor]))
+                if (!optimizations.ExplicitSpacing && char.IsWhiteSpace(code[cursor]))
                 {
                     expandLimit = 0; // Reset expand limit on whitespace
                     while (cursor < code.Length && char.IsWhiteSpace(code[cursor]))
@@ -904,7 +916,47 @@ class ParserV3
         return false; // No match found
     }
 
+    //! instrumentation wrapper: only pays for metrics when a collector is attached, otherwise it
+    //! forwards straight to the parser body
     internal static bool Check(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, out Slack slack, Optimizations optimizations, int depth = 0)
+    {
+        //! the scope this rule runs in decides whitespace skipping; resolve the rule's own modifier
+        //! against the enclosing scope, and restore it afterwards so siblings are unaffected
+        bool previousSpacing = optimizations.ExplicitSpacing;
+        optimizations.ExplicitSpacing = ResolveSpacing(rule, previousSpacing);
+        try
+        {
+            var metrics = optimizations.Metrics;
+            if (metrics == null)
+            {
+                return CheckCore(code, cursor, expandAllowed, rule, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, out expandedBy, out slack, optimizations, depth);
+            }
+            var frame = metrics.Enter(rule);
+            bool matched = false;
+            try
+            {
+                matched = CheckCore(code, cursor, expandAllowed, rule, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, out expandedBy, out slack, optimizations, depth);
+                return matched;
+            }
+            finally
+            {
+                metrics.Exit(frame, matched);
+            }
+        }
+        finally
+        {
+            optimizations.ExplicitSpacing = previousSpacing;
+        }
+    }
+
+    static bool ResolveSpacing(Rule rule, bool ambient) => rule.Spacing switch
+    {
+        SpacingMode.Explicit => true,
+        SpacingMode.Implicit => false,
+        _ => ambient
+    };
+
+    internal static bool CheckCore(string code, int cursor, int expandAllowed, Rule rule, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, out Slack slack, Optimizations optimizations, int depth = 0)
     {
         newCursor = cursor;
         expandLimit = 0;
@@ -1023,6 +1075,44 @@ class ParserV3
                         }
                         ruleTree = null;
                         return false;
+                    case "tab":
+                        if (code[cursor] == '\t')
+                        {
+                            newCursor = cursor + 1;
+                            ruleTree = new Tree(new Token("tab", code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
+                            return true;
+                        }
+                        ruleTree = null;
+                        return false;
+                    case "newline":
+                        //! a single raw line-break character; `\r\n` is two matches, repeat the token for a run
+                        if (code[cursor] == '\n' || code[cursor] == '\r')
+                        {
+                            newCursor = cursor + 1;
+                            ruleTree = new Tree(new Token("newline", code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
+                            return true;
+                        }
+                        ruleTree = null;
+                        return false;
+                    case "whitespace":
+                        {
+                            //! greedy by default: `$whitespace:` backs the match, the default `\s+` eats the
+                            //! whole run. A single-character regex (e.g. `[ \t]`) makes it non-greedy.
+                            Checker whitespaceRgx = specStore.GetSpec("whitespace", @"\s+");
+                            int whitespaceEnd = cursor;
+                            while (whitespaceEnd < code.Length && whitespaceRgx.FullMatch(code[cursor..(whitespaceEnd + 1)]))
+                            {
+                                whitespaceEnd++;
+                            }
+                            if (whitespaceEnd == cursor)
+                            {
+                                ruleTree = null;
+                                return false;
+                            }
+                            newCursor = whitespaceEnd;
+                            ruleTree = new Tree(new Token("whitespace", code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
+                            return true;
+                        }
                     case "name":
                         if (char.IsWhiteSpace(code[cursor]))
                         {

@@ -2,6 +2,15 @@ using System.Text.RegularExpressions;
 
 namespace ClemToken
 {
+    //! how a rule/scope treats implicit whitespace skipping between its children:
+    //! Inherit keeps the enclosing scope, Explicit disables skipping, Implicit re-enables it.
+    enum SpacingMode
+    {
+        Inherit = 0,
+        Explicit = 1,
+        Implicit = 2
+    }
+
     abstract class Rule
     {
         public abstract (int, int) Repeat { get; set; }
@@ -11,6 +20,8 @@ namespace ClemToken
         public abstract Rule[] Children { get; set; }
         public abstract bool IsReserved { get; set; }
         public abstract string UID { get; set; }
+        //! concrete on purpose: every rule carries its own spacing modifier (Inherit by default)
+        public SpacingMode Spacing { get; set; } = SpacingMode.Inherit;
     }
 
     class Simple : Rule
@@ -371,6 +382,10 @@ namespace ClemToken
             spec = new Spec();
             if (line.StartsWith('$'))
             {
+                if (TryConsumeSpacingModifier(line, out _, out _))
+                {
+                    return false; // $explicit:/$implicit: prefix, not a spec
+                }
                 int colonIndex = line.IndexOf(':');
                 if (colonIndex == -1)
                 {
@@ -409,11 +424,57 @@ namespace ClemToken
             return false;
         }
 
+        //! spacing modifier grammar: `$explicit:` / `$implicit:` are the long forms, `!` is shorthand for
+        //! `$explicit:`. A modifier must be glued to its target (`@`, `(` or `[`) so a lone `!` or a
+        //! `$spec: value` line is not mistaken for one.
+        private static bool TryConsumeSpacingModifier(string text, out SpacingMode mode, out int consumed)
+        {
+            mode = SpacingMode.Inherit;
+            consumed = 0;
+            const string explicitPrefix = "$explicit:";
+            const string implicitPrefix = "$implicit:";
+            if (text.StartsWith(explicitPrefix, StringComparison.Ordinal) && IsModifierTarget(text, explicitPrefix.Length))
+            {
+                mode = SpacingMode.Explicit;
+                consumed = explicitPrefix.Length;
+                return true;
+            }
+            if (text.StartsWith(implicitPrefix, StringComparison.Ordinal) && IsModifierTarget(text, implicitPrefix.Length))
+            {
+                mode = SpacingMode.Implicit;
+                consumed = implicitPrefix.Length;
+                return true;
+            }
+            if (text.StartsWith('!') && IsModifierTarget(text, 1))
+            {
+                mode = SpacingMode.Explicit;
+                consumed = 1;
+                return true;
+            }
+            return false;
+        }
+
+        private static bool IsModifierTarget(string text, int index)
+        {
+            if (index >= text.Length)
+            {
+                return false;
+            }
+            char c = text[index];
+            return c == '@' || c == '(' || c == '[';
+        }
+
         private static Rule ParseLine(string line, bool inAnchor = false)
         {
             if (line.StartsWith('#'))
             {
                 return new ProcessRule(); // comment
+            }
+            SpacingMode rootSpacing = SpacingMode.Inherit;
+            if (TryConsumeSpacingModifier(line, out SpacingMode startingSpacing, out int startingConsumed))
+            {
+                rootSpacing = startingSpacing;
+                line = line[startingConsumed..].TrimStart();
             }
             Rule? root = null;
             string anchor = "";
@@ -441,9 +502,19 @@ namespace ClemToken
                 Logger.Log("Found anchor: " + anchor);
                 root = new Anchor(anchor);
                 var result = ParseLine(line[(anchor.Length + 1)..], true);
+                if (rootSpacing != SpacingMode.Inherit)
+                {
+                    root.Spacing = rootSpacing;
+                }
                 if (result is Anchor tmp)
                 {
                     root.Children = tmp.Children;
+                    //! a modifier written on the body itself (`@rule: $explicit: ...`) is more local and
+                    //! wins over the one on the anchor (`!@rule:`)
+                    if (tmp.Spacing != SpacingMode.Inherit)
+                    {
+                        root.Spacing = tmp.Spacing;
+                    }
                 }
                 else
                 {
@@ -451,10 +522,17 @@ namespace ClemToken
                 }
                 return root;
             }
+            SpacingMode pendingSpacing = SpacingMode.Inherit;
             for (int i = 0; i < line.Length; i++)
             {
                 if (char.IsWhiteSpace(line[i]))
                 {
+                    continue;
+                }
+                if (TryConsumeSpacingModifier(line[i..], out SpacingMode inlineSpacing, out int inlineConsumed))
+                {
+                    pendingSpacing = inlineSpacing;
+                    i += inlineConsumed - 1;
                     continue;
                 }
                 var ver = VerifyGroup(line[i..]);
@@ -523,6 +601,8 @@ namespace ClemToken
                     {
                         Logger.Log("Found token: " + acc+ " ("+tk.GetType().Name+")");
                     }
+                    tk.Spacing = pendingSpacing;
+                    pendingSpacing = SpacingMode.Inherit;
                     if (root == null)
                     {
                         if (inAnchor)
@@ -546,6 +626,8 @@ namespace ClemToken
                 if (token.Item2.Name.Contains(' ') || token.Item2.Name == token.Item2.Value)
                     token.Item2.Name = "Anonymous";
                 token.Item2.Children = ch;
+                token.Item2.Spacing = pendingSpacing;
+                pendingSpacing = SpacingMode.Inherit;
                 i += ver.Item2.Length + ver.Item3.Length + ver.Item4.Length + 2;
                 if (token.Item1)
                 {
@@ -587,6 +669,10 @@ namespace ClemToken
             if (root == null)
             {
                 throw new Exception("No tokens found in line (length " + line.Length + "): " + line);
+            }
+            if (rootSpacing != SpacingMode.Inherit)
+            {
+                root.Spacing = rootSpacing;
             }
             return root;
         }
@@ -659,10 +745,17 @@ namespace ClemToken
         private static Rule[] ExploreSubgroups(string text, bool inOptional)
         {
             List<Rule> rules = new List<Rule>();
+            SpacingMode pendingSpacing = SpacingMode.Inherit;
             for (int i = 0; i < text.Length; i++)
             {
                 if (!char.IsWhiteSpace(text[i]))
                 {
+                    if (TryConsumeSpacingModifier(text[i..], out SpacingMode inlineSpacing, out int inlineConsumed))
+                    {
+                        pendingSpacing = inlineSpacing;
+                        i += inlineConsumed - 1;
+                        continue;
+                    }
                     var search = VerifyGroup(text[i..]);
                     if (search.Item1)
                     {
@@ -677,6 +770,8 @@ namespace ClemToken
                         }
                         var children = ExploreSubgroups(search.Item2, false);
                         token.Children = children;
+                        token.Spacing = pendingSpacing;
+                        pendingSpacing = SpacingMode.Inherit;
                         i += search.Item2.Length + search.Item3.Length + search.Item4.Length + 2;
                         if (subgroup)
                         {
@@ -750,6 +845,8 @@ namespace ClemToken
                             throw new Exception("Anchors are not authorized in subgroups: " + text[i..]);
                         }
                         Logger.Log("Found token: " + tk.Name+ " ("+tk.GetType().Name+")");
+                        tk.Spacing = pendingSpacing;
+                        pendingSpacing = SpacingMode.Inherit;
                         i += tk.Value?.Length ?? tk.Name.Length;
                         rules.Add(tk);
                     }
@@ -1040,7 +1137,7 @@ namespace ClemToken
             return text[..index] + replace + text[(index + search.Length)..];
         }
 
-        [GeneratedRegex(@"^(?:(?<prefix>[^\[\(\):\+\*\-\s]+:_?|_)(?<token>\((?:(?<subgroup>(?:[^\[\(\):\+\*\-\s]+:_?|_)?\( .* \):?(?:\+|\?|\*|\d+(?:-\d+)?|_|:))|.)*\))(?<suffix>:?(?:\+|\?|\*|\d+(?:-\d+)?|_|:)?))|^(?:(?<post_token>\((?:(?<subgroup_post>(?:[^\[\(\):\+\*\-\s]+:_?|_)?\( .* \):?(?:\+|\?|\*|\d+(?:-\d+)?|_|:))|.)*\))(?<solo_suffix>:?(?:\+|\?|\*|\d+(?:-\d+)?|_|:)))")]
+        [GeneratedRegex(@"^(?:(?<prefix>[^\[\(\):\+\*\-\s]+:_?|_)(?<token>\((?:(?<subgroup>(?:[^\[\(\):\+\*\-\s]+:_?|_)?\( .* \):?(?:\+|\?|\*|\d+(?:-\d+)?|_|:))|.)*\))(?<suffix>:?(?:\+|\?|\*|\d+(?:-\d+)?|_|:)?))|^(?:(?<post_token>\((?:(?<subgroup_post>(?:[^\[\(\):\+\*\-\s]+:_?|_)?\( .* \):?(?:\+|\?|\*|\d+(?:-\d+)?|_|:))|.)*\))(?<solo_suffix>:?(?:\+|\?|\*|\d+(?:-\d+)?|_|:)?))")]
         private static partial Regex GroupRegex();
     }
 }

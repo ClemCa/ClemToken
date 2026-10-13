@@ -368,3 +368,86 @@ import @identifier _(. @identifier)* from @identifier ;
         )
     )
 )
+!@rule: var $[space] @id
+(
+    Name: rule
+    Value: @rule:
+    Spacing: explicit
+    (
+        Name: var
+        Value: var
+    )
+    (
+        Name: space
+        Value: $[space]
+        IsReserved: true
+    )
+    (
+        Name: id
+        Value: @id
+    )
+)
+$explicit:@rule2: var
+(
+    Name: rule2
+    Value: @rule2:
+    Spacing: explicit
+    (
+        Name: var
+        Value: var
+    )
+)
+@rule3: !(a b)
+(
+    Name: rule3
+    Value: @rule3:
+    Spacing: explicit
+    (
+        Name: Anonymous
+        (
+            Name: a
+            Value: a
+        )
+        (
+            Name: b
+            Value: b
+        )
+    )
+)
+@rule4: $implicit:(a b)
+(
+    Name: rule4
+    Value: @rule4:
+    Spacing: implicit
+    (
+        Name: Anonymous
+        (
+            Name: a
+            Value: a
+        )
+        (
+            Name: b
+            Value: b
+        )
+    )
+)
+@rule5: $[tab] $[newline] $[whitespace]
+(
+    Name: rule5
+    Value: @rule5:
+    (
+        Name: tab
+        Value: $[tab]
+        IsReserved: true
+    )
+    (
+        Name: newline
+        Value: $[newline]
+        IsReserved: true
+    )
+    (
+        Name: whitespace
+        Value: $[whitespace]
+        IsReserved: true
+    )
+)

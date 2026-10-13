@@ -11,6 +11,7 @@ namespace ClemToken
         public string? Ignored;
         public string? IsReserved;
         public string? Repeat;
+        public string? Spacing;
         public List<TestingTree> Children;
         public TestingTree()
         {
@@ -19,6 +20,7 @@ namespace ClemToken
             Ignored = null;
             IsReserved = null;
             Repeat = null;
+            Spacing = null;
             Children = new();
         }
         public TestingTree SetAtDepth(int depth, TestingTree changeTree)
@@ -30,10 +32,11 @@ namespace ClemToken
                 this.Ignored = changeTree.Ignored ?? this.Ignored;
                 this.IsReserved = changeTree.IsReserved ?? this.IsReserved;
                 this.Repeat = changeTree.Repeat ?? this.Repeat;
+                this.Spacing = changeTree.Spacing ?? this.Spacing;
                 this.Children = [.. this.Children, .. changeTree.Children ?? []];
                 return this;
             }
-            if (this.Children.Count == 0 || (depth == 1 && changeTree.Name == null && changeTree.Value == null && changeTree.Ignored == null && changeTree.IsReserved == null && changeTree.Repeat == null))
+            if (this.Children.Count == 0 || (depth == 1 && changeTree.Name == null && changeTree.Value == null && changeTree.Ignored == null && changeTree.IsReserved == null && changeTree.Repeat == null && changeTree.Spacing == null))
             {
                 this.Children.Add(new());
             }
@@ -145,6 +148,10 @@ namespace ClemToken
             if (tree.Repeat != null && rule.Repeat.Item1 + " " + rule.Repeat.Item2 != tree.Repeat)
             {
                 throw new Exception($"[Step {step}] Repeat mismatch: (Rule) {rule.Repeat.Item1} {rule.Repeat.Item2} != (Test) {tree.Repeat}");
+            }
+            if (tree.Spacing != null && rule.Spacing.ToString().ToLower() != tree.Spacing)
+            {
+                throw new Exception($"[Step {step}] Spacing mismatch: (Rule) {rule.Spacing} != (Test) {tree.Spacing}");
             }
             if (tree.Children.Count != rule.Children.Count())
             {
@@ -285,6 +292,9 @@ namespace ClemToken
                             break;
                         case "Repeat":
                             changeTree.Repeat = value;
+                            break;
+                        case "Spacing":
+                            changeTree.Spacing = value;
                             break;
                         default:
                             throw new Exception("Invalid syntax: unknown field " + name + " after " + line);
