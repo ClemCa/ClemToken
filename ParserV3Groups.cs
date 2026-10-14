@@ -317,7 +317,7 @@ class GroupParser
                 //! budget untouched, so the following sibling still sees the previous allowance
                 int nextExpand = pushed ? childExpandLimit : fromExpand;
 
-                bool reached = ResolveFrom(index + 1, childCursor, nextExpand, pre, slots, out endCursor, out endExpand, out int deeperExpandedBy, out endSlack, out resolved);
+                bool reached = ResolveFrom(index + 1, childCursor, nextExpand, pre, slots, out endCursor, out endExpand, out int deeperExpandedBy, out endSlack, out resolved, overrideIndex, overrideResult);
                 slots.RemoveAt(slots.Count - 1);
                 if (pushed)
                 {

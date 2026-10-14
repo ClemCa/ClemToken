@@ -1260,7 +1260,7 @@ class ParserV3
                         {
                             continue;
                         }
-                        foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, optimizations, depth);
+                        foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, child.Value, optimizations, depth);
                         if (foundIndex != -1) break;
                     }
                 }
@@ -1281,12 +1281,16 @@ class ParserV3
                 throw new NotSupportedException($"Rule type {rule.GetType().Name} is not supported.");
         }
     }
+    //! an optional lookahead holds each alternative in its children, so the searched literal differs
+    //! from the joined Value; the parent is kept as the cache identity while the value is passed in
     static int LookaheadLookup(string code, int startIndex, int endIndex, Rule lookahead, Optimizations optimizations, int depth)
+        => LookaheadLookup(code, startIndex, endIndex, lookahead, lookahead.Value!, optimizations, depth);
+    static int LookaheadLookup(string code, int startIndex, int endIndex, Rule lookahead, string value, Optimizations optimizations, int depth)
     {
         int index = -1;
         while (index == -1 && startIndex < endIndex)
         {
-            index = code.IndexOf(lookahead.Value!, startIndex, endIndex - startIndex);
+            index = code.IndexOf(value, startIndex, endIndex - startIndex);
             if (index == -1) return -1;
             if (optimizations.IsCached(lookahead, index))
             {
