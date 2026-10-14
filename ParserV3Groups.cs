@@ -419,6 +419,9 @@ class GroupParser
                 expandedBy = expanded - whitespaceExpansion;
                 newCursor = childCursor;
                 slack = parsedSlack;
+                //! a successful child marks how far the failing rule actually got; a speculative miss
+                //! reports nothing, so probing whitespace/comment runs cannot inflate the failed region
+                optimizations.ReportReached(childCursor);
                 return true;
             }
             if (targetCursor >= code.Length)

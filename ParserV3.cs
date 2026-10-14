@@ -66,6 +66,20 @@ class Optimizations
     //! restored around each rule check, so it always reflects the enclosing scope during a check.
     public bool ExplicitSpacing;
 
+    //! furthest cursor any successful match reached during the current top-level match attempt. Error
+    //! recovery uses it as the end of a failed region: a lower-priority root whose match stops short of
+    //! it is only a fragment of a higher-priority rule that got further, so the whole region becomes one
+    //! Error instead of a run of tiny matches. Speculative failures report nothing, so a whitespace or
+    //! comment stretch probed and abandoned cannot inflate the region. Reset at the start of every Match.
+    public int FurthestReached;
+    public void ReportReached(int cursor)
+    {
+        if (cursor > FurthestReached)
+        {
+            FurthestReached = cursor;
+        }
+    }
+
     //! Retroactive cache journal
     // A demanded repeat re-run happens after the demanded node already returned, so the caches it
     // wrote during the lower-demand attempt are still live. Rolling back to a checkpoint taken
@@ -73,7 +87,7 @@ class Optimizations
     // the new attempt. Entries are only final once DefinitiveProgression commits them.
     public readonly record struct Checkpoint(int Invalidated, int Lookahead, int Stack);
 
-    private List<((string UID, int Cursor) key, bool hadPrevious, int previousDemand)> _invalidatedJournal = [];
+    private List<((string UID, int Cursor, bool Explicit, int Expand) key, bool hadPrevious, int previousDemand)> _invalidatedJournal = [];
     private List<(int index, (string stack, (string UID, int foundIndex) signature) entry, bool added)> _lookaheadJournal = [];
 
     public Checkpoint Mark() => new(_invalidatedJournal.Count, _lookaheadJournal.Count, searchStack.Count);
@@ -126,7 +140,7 @@ class Optimizations
     public void DefinitiveProgression(int cursor)
     {
         CommitAll();
-        List<(string UID, int Cursor)> staleInvalidated = [];
+        List<(string UID, int Cursor, bool Explicit, int Expand)> staleInvalidated = [];
         foreach (var entry in _invalidated)
         {
             if (entry.Key.Cursor < cursor)
@@ -175,14 +189,22 @@ class Optimizations
         _stackKeys.RemoveAt(_stackKeys.Count - 1);
         ClearLookahead();
     }
+    //! context signals that make a failure non-reusable: a recursion-guard abort, or a lookahead-cache
+    //! read/write, both make a rule's outcome depend on parse state rather than position alone
+    public int GuardAborts;
+    public int LookaheadWrites;
+    public int LookaheadSkips;
+
     //! Preemptive invalidation
     // Stores the *minimal* demand at which (rule, cursor) is known to fail. Failure is monotone in
     // demand (requiring more passes is strictly harder), so a failure recorded at demand d is safely
-    // reusable for any demand >= d.
-    private Dictionary<(string UID, int Cursor), int> _invalidated = new();
-    public void Invalidate(Rule rule, int cursor, int demand = 0)
+    // reusable for any demand >= d. The spacing mode is part of the key: a rule that inherits spacing
+    // matches differently under an explicit vs implicit scope, so a failure only counts in the same one.
+    private Dictionary<(string UID, int Cursor, bool Explicit, int Expand), int> _invalidated = new();
+    private (string UID, int Cursor, bool Explicit, int Expand) InvalidationKey(Rule rule, int cursor, int expandAllowed) => (rule.UID, cursor, ExplicitSpacing, expandAllowed);
+    public void Invalidate(Rule rule, int cursor, int expandAllowed, int demand = 0)
     {
-        var key = (rule.UID, cursor);
+        var key = InvalidationKey(rule, cursor, expandAllowed);
         if (_invalidated.TryGetValue(key, out var existing))
         {
             if (existing <= demand)
@@ -198,9 +220,18 @@ class Optimizations
             _invalidated[key] = demand;
         }
     }
-    public bool IsInvalidated(Rule rule, int cursor, int demand = 0)
+    public void InvalidatePermanent(Rule rule, int cursor, int expandAllowed, int demand = 0)
     {
-        return _invalidated.TryGetValue((rule.UID, cursor), out var failingDemand) && failingDemand <= demand;
+        var key = InvalidationKey(rule, cursor, expandAllowed);
+        if (_invalidated.TryGetValue(key, out var existing) && existing <= demand)
+        {
+            return;
+        }
+        _invalidated[key] = demand;
+    }
+    public bool IsInvalidated(Rule rule, int cursor, int expandAllowed, int demand = 0)
+    {
+        return _invalidated.TryGetValue(InvalidationKey(rule, cursor, expandAllowed), out var failingDemand) && failingDemand <= demand;
     }
     //! Lookahead uniqueness
     private List<(string stack, (string UID, int foundIndex) signature)> _lookaheadCache = [];
@@ -210,6 +241,7 @@ class Optimizations
         Logger.Log($"Caching lookahead: {lookahead.Name} at index {foundIndex} with stack {key}", depth);
         _lookaheadJournal.Add((_lookaheadCache.Count, (key, (lookahead.UID, foundIndex)), true));
         _lookaheadCache.Add((key, (lookahead.UID, foundIndex)));
+        LookaheadWrites++;
     }
     private void ClearLookahead()
     {
@@ -409,6 +441,7 @@ class AntiCompute()
     {
         if (optimizations.SearchStackDepth > recursion_limit)
         {
+            optimizations.GuardAborts++;
             return false;
         }
         if (optimizations.SearchStack.Contains((rule.UID, cursor)))
@@ -416,12 +449,14 @@ class AntiCompute()
             var stackList = optimizations.SearchStack.ToList(); // top-first order
             if (stackList.Count((v) => v.Item1 == rule.UID && v.Item2 == cursor) > recursion_repeat_limit)
             {
+                optimizations.GuardAborts++;
                 return false;
             }
             int matchIndex = stackList.FindIndex(entry => entry.Item1 == rule.UID && entry.Item2 == cursor);
             List<(string, int)> sequence = stackList.Take(matchIndex).ToList();
             if (sequence.Count == 0)
             {
+                optimizations.GuardAborts++;
                 return false;
             }
             if (sequence.Count >= optimizations.SearchStackDepth / 2)
@@ -450,6 +485,7 @@ class AntiCompute()
             }
             if (hasRepeat)
             {
+                optimizations.GuardAborts++;
                 return false;
             }
             optimizations.PushSearch(rule, cursor);
@@ -814,6 +850,30 @@ class ParserV3
             tree.Token.Column = column;
             return tree;
         }
+        //! record one Error covering [start, end); merge it with an immediately preceding Error so a failed
+        //! region becomes a single token rather than a run of one-character ones
+        void AddErrorSpan(int start, int end)
+        {
+            if (end <= start)
+            {
+                end = start + 1;
+            }
+            if (end > code.Length)
+            {
+                end = code.Length;
+            }
+            if (tree.Children.Count > 0)
+            {
+                var last = tree.Children[^1];
+                if (last.Token.Name == "Error" && last.Token.Line + last.Token.Value.Length == start)
+                {
+                    last.Token.Value = code[last.Token.Line..end];
+                    tree.Children[^1] = last;
+                    return;
+                }
+            }
+            tree.Children.Add(new Tree(new Token("Error", code[start..end], start, 0, false), []));
+        }
         int expandLimit = 0;
         while (cursor < code.Length)
         {
@@ -825,7 +885,25 @@ class ParserV3
             }
             if (Match(code, cursor, rules, specStore, referenceStore, out Tree? foundTree, out int newCursor, out int matchExpandLimit, out Slack matchSlack, optimizations))
             {
+                //! a higher-priority rule consumed further before failing: this match is only a fragment
+                //! of it, so report the whole failed region as one Error and skip past it instead
+                if (newCursor < optimizations.FurthestReached)
+                {
+                    AddErrorSpan(cursor, optimizations.FurthestReached);
+                    cursor = optimizations.FurthestReached;
+                    expandLimit = 0;
+                    optimizations.DefinitiveProgression(cursor);
+                    continue;
+                }
                 cursor = newCursor;
+                //! a name-like token can still absorb the rest of its run; take it now instead of letting a
+                //! following root match split it into one-character fragments
+                if (matchExpandLimit > 0 && foundTree.HasValue)
+                {
+                    foundTree = ExpandLastNode(foundTree.Value, code, matchExpandLimit);
+                    cursor += matchExpandLimit;
+                    matchExpandLimit = 0;
+                }
                 expandLimit = matchExpandLimit;
                 optimizations.DefinitiveProgression(cursor);
                 if (foundTree == null)
@@ -871,8 +949,9 @@ class ParserV3
                 }
                 else
                 {
-                    tree.Children.Add(new Tree(new Token("Error", "Unexpected character: " + code[cursor], cursor, 0, false), []));
-                    cursor++; // skip one character to continue parsing
+                    int failureEnd = optimizations.FurthestReached > cursor ? optimizations.FurthestReached : cursor + 1;
+                    AddErrorSpan(cursor, failureEnd);
+                    cursor = failureEnd; // skip the whole failed region
                 }
             }
         }
@@ -888,6 +967,7 @@ class ParserV3
     {
         newCursor = cursor; // No match found, return the original 
         slack = Slack.None;
+        optimizations.FurthestReached = cursor; // reset the reached region for this position
         foreach (var rule in rules)
         {
             // check if current call stack is near stack overflow
@@ -904,6 +984,8 @@ class ParserV3
                 Logger.Log($"Matched rule {rule} {rule.Name} at cursor: {cursor} size: {cursor - ruleCursor}");
                 newCursor = ruleCursor;
                 foundTree = ruleTree;
+                //! Check keeps only the reached region of failing rules, so FurthestReached here is how
+                //! far a higher-priority rule got before this one matched
                 optimizations.DefinitiveProgression(cursor);
                 //! expanded by is unused, as the expandLimit input is always 0 here
                 return true;
@@ -924,24 +1006,34 @@ class ParserV3
         //! against the enclosing scope, and restore it afterwards so siblings are unaffected
         bool previousSpacing = optimizations.ExplicitSpacing;
         optimizations.ExplicitSpacing = ResolveSpacing(rule, previousSpacing);
+        //! a successful rule's speculative dead ends must not extend the reached region: keep what a
+        //! rule consumed only when the rule itself fails, so FurthestReached follows the failing path
+        int savedReached = optimizations.FurthestReached;
         try
         {
             var metrics = optimizations.Metrics;
+            bool matched = false;
             if (metrics == null)
             {
-                return CheckCore(code, cursor, expandAllowed, rule, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, out expandedBy, out slack, optimizations, depth);
-            }
-            var frame = metrics.Enter(rule);
-            bool matched = false;
-            try
-            {
                 matched = CheckCore(code, cursor, expandAllowed, rule, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, out expandedBy, out slack, optimizations, depth);
-                return matched;
             }
-            finally
+            else
             {
-                metrics.Exit(frame, matched);
+                var frame = metrics.Enter(rule);
+                try
+                {
+                    matched = CheckCore(code, cursor, expandAllowed, rule, specStore, referenceStore, out newCursor, out ruleTree, out expandLimit, out expandedBy, out slack, optimizations, depth);
+                }
+                finally
+                {
+                    metrics.Exit(frame, matched);
+                }
             }
+            if (matched)
+            {
+                optimizations.FurthestReached = savedReached;
+            }
+            return matched;
         }
         finally
         {
@@ -1199,7 +1291,7 @@ class ParserV3
                     throw new StackOverflowException("Stack overflow during parsing. Possible infinite recursion in grammar rules.");
                 }
                 expandedBy = 0;
-                if (optimizations.IsInvalidated(referenceRule, cursor))
+                if (optimizations.IsInvalidated(referenceRule, cursor, expandAllowed))
                 {
                     ruleTree = null;
                     return false; // avoids doing the extra work of computing the rule again at this cursor
@@ -1212,6 +1304,9 @@ class ParserV3
                 }
                 Logger.Log($"@> Reference {reference.Name} to {referenceRule.Name}", depth);
                 var cacheCheckpoint = optimizations.Mark();
+                int guardAbortsBefore = optimizations.GuardAborts;
+                int lookaheadWritesBefore = optimizations.LookaheadWrites;
+                int lookaheadSkipsBefore = optimizations.LookaheadSkips;
                 bool success = Check(code, cursor, expandAllowed, referenceRule, specStore, referenceStore, out newCursor, out ruleOutput, out expandLimit, out expandedBy, out Slack innerSlack, optimizations, depth + 1);
                 bool checkFailed = !success;
                 slack = innerSlack;
@@ -1238,7 +1333,16 @@ class ParserV3
                 AntiCompute.Finished(optimizations, referenceRule, cursor);
                 if (checkFailed)
                 {
-                    optimizations.Invalidate(referenceRule, cursor);
+                    if (optimizations.GuardAborts == guardAbortsBefore
+                        && optimizations.LookaheadWrites == lookaheadWritesBefore
+                        && optimizations.LookaheadSkips == lookaheadSkipsBefore)
+                    {
+                        optimizations.InvalidatePermanent(referenceRule, cursor, expandAllowed);
+                    }
+                    else
+                    {
+                        optimizations.Invalidate(referenceRule, cursor, expandAllowed);
+                    }
                 }
                 Logger.Log($"{referenceRule.Name}{(ruleOutput != null && ruleOutput.Value.Token.Name != referenceRule.Name ? $" ({ruleOutput.Value.Token.Name})" : "")} {(success ? "matched" : "not matched")} at cursor {cursor}->{newCursor}", depth);
                 ruleTree = ruleOutput;
@@ -1294,6 +1398,7 @@ class ParserV3
             if (index == -1) return -1;
             if (optimizations.IsCached(lookahead, index))
             {
+                optimizations.LookaheadSkips++;
                 startIndex = index + 1; // skip this match and look for the next one
                 index = -1;
                 continue;
