@@ -50,10 +50,14 @@ $affix: :?(\+|\?|\*|[0-9]+(-[0-9]+)?|_|:)
 
 # BODY: a non-empty sequence of elements (groups, references, optionals, ...)
 @body: (@element)+
-# `@close_paren` is a last resort: a `)` that no group consumed (e.g. an unbalanced paren in the
-# source) is still a token rather than a parse error. It is tried last so groups own their closers.
-@element: [@lookahead | @optional | @group | @reference | @reserved | @suffix | @escaped | @simple | @close_paren]
+# `@close_paren`, `@at_alone` and `@dollar_alone` are last resorts: a `)`, `@` or `$` that no other
+# element consumed (an unbalanced paren, or a rule matching a literal `@`/`$` such as this file's own
+# `@specline`/`@ruleline`) is still a token rather than a parse error. They are tried last so groups
+# own their closers and `@reserved`/`@reference` own `$[...]` and `@name`.
+@element: [@lookahead | @optional | @group | @reference | @reserved | @suffix | @escaped | @simple | @close_paren | @at_alone | @dollar_alone]
 @close_paren: $[rparen]
+@at_alone: $[at]
+@dollar_alone: $[dollar]
 
 # ESCAPED LITERAL: `\[`, `\]` (an escape sequence the DSL treats as a literal character)
 @escaped: $[escape]

@@ -87,6 +87,24 @@ namespace ClemToken
             ParserV3.Parse(text, rules, specs, collector);
             return collector.Build();
         }
+
+        // parser-driven syntax tokens, serialized as the versioned JSON contract editors consume
+        public static string TokensJson(this string text, string grammarPath)
+        {
+            var (rules, specs) = Serializer.Deserialize(File.ReadAllBytes(grammarPath));
+            return Tokens(text, rules, specs);
+        }
+        public static string TokensJson(this string text)
+        {
+            if (preloadedRules == null || preloadedSpecs == null)
+            {
+                throw new InvalidOperationException("No grammar has been preloaded");
+            }
+            return Tokens(text, preloadedRules, preloadedSpecs);
+        }
+        //! internal: Rule/Spec are not public, so this cannot be an outward-facing overload
+        internal static string Tokens(string text, Rule[] rules, Spec[] specs) =>
+            SyntaxTokens.ToJson(SyntaxTokens.Collect(ParserV3.Parse(text, rules, specs), rules));
     }
 
     class Program
@@ -118,15 +136,32 @@ namespace ClemToken
                     args = [.. arguments];
                 }
             }
+            //! -tokens is order-independent too; it emits the parser's syntax tokens as JSON
+            bool tokensMode = false;
+            {
+                var arguments = new List<string>(args);
+                int tokensIndex = arguments.IndexOf("-tokens");
+                if (tokensIndex >= 0)
+                {
+                    arguments.RemoveAt(tokensIndex);
+                    tokensMode = true;
+                    // `json` is the only format; accept it explicitly for symmetry with -stats
+                    if (tokensIndex < arguments.Count && arguments[tokensIndex] == "json")
+                    {
+                        arguments.RemoveAt(tokensIndex);
+                    }
+                    args = [.. arguments];
+                }
+            }
             //! keep stdout clean when it is meant to be machine-readable
-            if (statsFormat != "json")
+            if (statsFormat != "json" && !tokensMode)
             {
                 Console.WriteLine("ClemToken");
             }
 
             if (args.Length < 2)
             {
-                Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in | Tokenizer -f <grammar> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json] | Tokenizer [-testG] <input> | Tokenizer [-testP] <input> <grammar>");
+                Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in | Tokenizer -f <grammar> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json] | Tokenizer -f <rule-file> -i <source> -tokens [json] | Tokenizer [-testG] <input> | Tokenizer [-testP] <input> <grammar>");
                 return;
             }
             if (statsMode == "grammar")
@@ -159,7 +194,7 @@ namespace ClemToken
                 string file = args[1];
                 if (args.Length < 3)
                 {
-                    Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <grammar> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json]");
+                    Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <grammar> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json] | Tokenizer -f <rule-file> -i <source> -tokens [json]");
                     return;
                 }
                 if (args[2] == "-preload")
@@ -229,6 +264,11 @@ namespace ClemToken
                     if (statsMode == "parse")
                     {
                         PrintStats(Utils.MeasureParse(text, file), statsFormat);
+                        return;
+                    }
+                    if (tokensMode)
+                    {
+                        Console.Write(Utils.TokensJson(text, file));
                         return;
                     }
                     var (rules, specs) = Serializer.Deserialize(File.ReadAllBytes(file));

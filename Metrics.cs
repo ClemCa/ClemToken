@@ -203,8 +203,50 @@ internal static class StatFormat
         return time.TotalMicroseconds.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + " us";
     }
 
-    public static string Json(string? text) =>
-        (text ?? "").Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t");
+    //! complete JSON string escaping: quotes, backslashes, every control character, and lone
+    //! surrogates (written as the replacement character). Token values carry arbitrary source text,
+    //! so anything less can emit invalid JSON or throw on a UTF-8 write.
+    public static string Json(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return "";
+        }
+        StringBuilder sb = new(text.Length + 8);
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            switch (c)
+            {
+                case '"': sb.Append("\\\""); break;
+                case '\\': sb.Append("\\\\"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                case '\b': sb.Append("\\b"); break;
+                case '\f': sb.Append("\\f"); break;
+                default:
+                    if (c < ' ')
+                    {
+                        sb.Append("\\u").Append(((int)c).ToString("x4"));
+                    }
+                    else if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+                    {
+                        sb.Append(c).Append(text[++i]);
+                    }
+                    else if (char.IsSurrogate(c))
+                    {
+                        sb.Append("\\ufffd");
+                    }
+                    else
+                    {
+                        sb.Append(c);
+                    }
+                    break;
+            }
+        }
+        return sb.ToString();
+    }
 }
 
 //! Static analysis of a grammar: per-rule symbol-count bounds plus construct counts. No input needed.
