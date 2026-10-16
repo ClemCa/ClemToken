@@ -109,7 +109,32 @@ namespace ClemToken
 
     class Program
     {
-        static void Main(string[] args)
+        //! The engine is spawned by editors on every keystroke burst, so a crash is never acceptable:
+        //! an unhandled exception in a NativeAOT binary fail-fasts (0xC0000409), which the host sees
+        //! as the process crashing. Everything routes through here so any failure becomes a message on
+        //! stderr and a non-zero exit code instead. Stack exhaustion is the one thing a `catch` cannot
+        //! handle, so the recursive walkers call EnsureSufficientExecutionStack() to turn it into a
+        //! catchable exception before the real overflow.
+        static int Main(string[] args)
+        {
+            try
+            {
+                Run(args);
+                return 0;
+            }
+            catch (InsufficientExecutionStackException)
+            {
+                Console.Error.WriteLine("ClemToken: input is nested too deeply to analyze.");
+                return 1;
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine($"ClemToken: {e.GetType().Name}: {e.Message}");
+                return 1;
+            }
+        }
+
+        static void Run(string[] args)
         {
             Logger.Mode = Logger.LogMode.Error;
 
@@ -123,9 +148,11 @@ namespace ClemToken
             }
             catch (IOException) { }
 
-            //! -stats is order-independent: pull it (with an optional mode/format token) out before dispatch
+            //! -stats is order-independent: pull it (with an optional mode/format/variant token) out
+            //! before dispatch. `tree` asks for the parse call-graph (`parseTree`) instead of the flat table.
             string? statsMode = null;
             string statsFormat = "table";
+            bool statsTree = false;
             {
                 var arguments = new List<string>(args);
                 int statsIndex = arguments.IndexOf("-stats");
@@ -133,14 +160,26 @@ namespace ClemToken
                 {
                     arguments.RemoveAt(statsIndex);
                     statsMode = "parse"; // default when no explicit mode
-                    if (statsIndex < arguments.Count && (arguments[statsIndex] == "grammar" || arguments[statsIndex] == "parse"))
+                    // consume the trailing keyword tokens in any order; the first non-keyword ends it
+                    while (statsIndex < arguments.Count)
                     {
-                        statsMode = arguments[statsIndex];
-                        arguments.RemoveAt(statsIndex);
-                    }
-                    if (statsIndex < arguments.Count && arguments[statsIndex] == "json")
-                    {
-                        statsFormat = "json";
+                        string token = arguments[statsIndex];
+                        if (token == "grammar" || token == "parse")
+                        {
+                            statsMode = token;
+                        }
+                        else if (token == "json")
+                        {
+                            statsFormat = "json";
+                        }
+                        else if (token == "tree")
+                        {
+                            statsTree = true;
+                        }
+                        else
+                        {
+                            break;
+                        }
                         arguments.RemoveAt(statsIndex);
                     }
                     args = [.. arguments];
@@ -171,7 +210,7 @@ namespace ClemToken
 
             if (args.Length < 2)
             {
-                Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in | Tokenizer -f <grammar|-> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json] | Tokenizer -f <rule-file> -i <source> -tokens [json] | Tokenizer [-testG] <input> | Tokenizer [-testP] <input> <grammar>");
+                Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in | Tokenizer -f <grammar|-> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [tree] [json] | Tokenizer -f <rule-file> -i <source> -tokens [json] | Tokenizer [-testG] <input> | Tokenizer [-testP] <input> <grammar>");
                 return;
             }
             if (statsMode == "grammar")
@@ -206,7 +245,7 @@ namespace ClemToken
                 string file = args[1];
                 if (args.Length < 3)
                 {
-                    Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <grammar|-> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json] | Tokenizer -f <rule-file> -i <source> -tokens [json]");
+                    Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <grammar|-> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [tree] [json] | Tokenizer -f <rule-file> -i <source> -tokens [json]");
                     return;
                 }
                 if (args[2] == "-preload")
@@ -275,7 +314,7 @@ namespace ClemToken
                     }
                     if (statsMode == "parse")
                     {
-                        PrintStats(Utils.MeasureParse(text, file), statsFormat);
+                        PrintStats(Utils.MeasureParse(text, file), statsFormat, statsTree);
                         return;
                     }
                     if (tokensMode)
@@ -328,9 +367,9 @@ namespace ClemToken
             else stats.WriteTo(Console.Out);
         }
 
-        static void PrintStats(ParseMetrics stats, string format)
+        static void PrintStats(ParseMetrics stats, string format, bool tree = false)
         {
-            if (format == "json") Console.Write(stats.ToJson());
+            if (format == "json") Console.Write(tree ? stats.ToTreeJson() : stats.ToJson());
             else stats.WriteTo(Console.Out);
         }
     }

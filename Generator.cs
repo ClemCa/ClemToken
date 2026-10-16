@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
 namespace ClemToken
@@ -753,6 +754,9 @@ namespace ClemToken
 
         private static Rule[] ExploreSubgroups(string text, bool inOptional)
         {
+            //! recurses once per nesting level, and a grammar can be nested arbitrarily deep; ask the
+            //! runtime to turn a runaway depth into a catchable error before the native stack dies
+            RuntimeHelpers.EnsureSufficientExecutionStack();
             List<Rule> rules = new List<Rule>();
             SpacingMode pendingSpacing = SpacingMode.Inherit;
             for (int i = 0; i < text.Length; i++)
@@ -865,6 +869,7 @@ namespace ClemToken
         }
         private static Rule ExploreOptional(string text)
         {
+            RuntimeHelpers.EnsureSufficientExecutionStack();
             var optional = new Optional();
             optional.Value = "[" + text + "]";
             string[] split = PairedSplit(text, " | ", '[', ']');

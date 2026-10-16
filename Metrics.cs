@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace ClemToken;
@@ -118,6 +119,8 @@ public sealed class GrammarStats
 
 public sealed class RuleMetrics
 {
+    //! position in ParseMetrics.Rules; the stable identity a parse-tree edge points at
+    public int Index { get; internal set; }
     public string Name { get; internal set; } = "";
     public string Type { get; internal set; } = "";
     public string? Value { get; internal set; }
@@ -132,11 +135,35 @@ public sealed class RuleMetrics
     public TimeSpan SelfTime { get; internal set; }
 }
 
+//! One node of the merged call tree a flame graph lays out. Occurrences that share the same call
+//! path (same ancestors, same rule) merge into one node, so a node's children are exactly the calls
+//! made inside it and a child's inclusive figures never exceed its parent's. `Rule` indexes
+//! ParseMetrics.Rules; the root has -1.
+public sealed class CallNode
+{
+    public int Index { get; internal set; }
+    //! parent node index, or -1 for the root
+    public int Parent { get; internal set; }
+    //! rule index into ParseMetrics.Rules, or -1 for the synthetic root
+    public int Rule { get; internal set; }
+    public long Executions { get; internal set; }
+    public long Matches { get; internal set; }
+    public long Failures { get; internal set; }
+    //! inclusive over this node's whole subtree
+    public long AllocatedBytes { get; internal set; }
+    public TimeSpan TotalTime { get; internal set; }
+    //! raw stopwatch ticks, resolved to TotalTime at Build; not serialized
+    internal long Ticks;
+}
+
 public sealed class ParseMetrics
 {
     //! version of the JSON contract. Bump on a breaking change (renamed/removed/retyped field);
     //! additive fields keep the version, mirroring the syntax-token contract.
     public const int SchemaVersion = 1;
+
+    //! version of the `parseTree` contract (`-stats parse tree json`), which carries the call tree
+    public const int TreeSchemaVersion = 1;
 
     public long TotalAllocatedBytes { get; internal set; }
     public TimeSpan TotalElapsed { get; internal set; }
@@ -144,6 +171,8 @@ public sealed class ParseMetrics
     public long UnattributedAllocatedBytes { get; internal set; }
     public TimeSpan UnattributedTime { get; internal set; }
     public IReadOnlyList<RuleMetrics> Rules { get; internal set; } = [];
+    //! merged call tree for the flame graph (`-stats parse tree json`); node 0 is the root
+    public IReadOnlyList<CallNode> Tree { get; internal set; } = [];
 
     public void WriteTo(TextWriter writer)
     {
@@ -184,6 +213,46 @@ public sealed class ParseMetrics
             sb.Append($"\"allocatedBytes\": {r.AllocatedBytes}, \"selfAllocatedBytes\": {r.SelfAllocatedBytes}, ");
             sb.Append($"\"totalMs\": {r.TotalTime.TotalMilliseconds.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}, \"selfMs\": {r.SelfTime.TotalMilliseconds.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)} }}");
             sb.Append(i < Rules.Count - 1 ? ",\n" : "\n");
+        }
+        sb.Append("  ]\n");
+        sb.Append("}\n");
+        return sb.ToString();
+    }
+
+    //! `parseTree` payload: the flat table plus the merged call tree a flame graph lays out.
+    //! Kept a separate schema so the plain `parseMetrics` contract is unchanged.
+    public string ToTreeJson()
+    {
+        var sb = new StringBuilder();
+        sb.Append("{\n");
+        sb.Append($"  \"schema\": \"clemtoken.parseTree\",\n");
+        sb.Append($"  \"version\": {TreeSchemaVersion},\n");
+        sb.Append($"  \"totalAllocatedBytes\": {TotalAllocatedBytes},\n");
+        sb.Append($"  \"totalElapsedMs\": {TotalElapsed.TotalMilliseconds.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)},\n");
+        sb.Append($"  \"unattributedAllocatedBytes\": {UnattributedAllocatedBytes},\n");
+        sb.Append($"  \"unattributedElapsedMs\": {UnattributedTime.TotalMilliseconds.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)},\n");
+        sb.Append("  \"rules\": [\n");
+        for (int i = 0; i < Rules.Count; i++)
+        {
+            var r = Rules[i];
+            sb.Append("    {");
+            sb.Append($" \"id\": {i}, \"name\": \"{StatFormat.Json(r.Name)}\", \"type\": \"{StatFormat.Json(r.Type)}\", \"value\": {(r.Value == null ? "null" : "\"" + StatFormat.Json(r.Value) + "\"")}, ");
+            sb.Append($"\"executions\": {r.Executions}, \"matches\": {r.Matches}, \"failures\": {r.Failures}, ");
+            sb.Append($"\"allocatedBytes\": {r.AllocatedBytes}, \"selfAllocatedBytes\": {r.SelfAllocatedBytes}, ");
+            sb.Append($"\"totalMs\": {r.TotalTime.TotalMilliseconds.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}, \"selfMs\": {r.SelfTime.TotalMilliseconds.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)} }}");
+            sb.Append(i < Rules.Count - 1 ? ",\n" : "\n");
+        }
+        sb.Append("  ],\n");
+        sb.Append("  \"tree\": [\n");
+        for (int i = 0; i < Tree.Count; i++)
+        {
+            var n = Tree[i];
+            sb.Append("    {");
+            sb.Append($" \"id\": {i}, \"parent\": {n.Parent}, \"rule\": {n.Rule}, ");
+            sb.Append($"\"executions\": {n.Executions}, \"matches\": {n.Matches}, \"failures\": {n.Failures}, ");
+            sb.Append($"\"allocatedBytes\": {n.AllocatedBytes}, ");
+            sb.Append($"\"totalMs\": {n.TotalTime.TotalMilliseconds.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)} }}");
+            sb.Append(i < Tree.Count - 1 ? ",\n" : "\n");
         }
         sb.Append("  ]\n");
         sb.Append("}\n");
@@ -374,6 +443,7 @@ internal static class GrammarAnalyzer
 
     private static void CollectReferences(Rule rule, Dictionary<string, int> anchors, List<int> into)
     {
+        RuntimeHelpers.EnsureSufficientExecutionStack();
         if (rule is Reference r)
         {
             if (anchors.TryGetValue(r.Name, out int index))
@@ -407,6 +477,7 @@ internal static class GrammarAnalyzer
     //! lookahead is zero-width, reference defers to the referenced rule.
     private static SymbolBound BoundNode(Rule rule, long[] low, long[] high, Dictionary<string, int> anchors)
     {
+        RuntimeHelpers.EnsureSufficientExecutionStack();
         switch (rule)
         {
             case Lookahead:
@@ -486,6 +557,7 @@ internal static class GrammarAnalyzer
 
     private static void CountNodes(Rule rule, ref int simple, ref int reserved, ref int group, ref int reference, ref int anchor, ref int optional, ref int lookahead, ref int empty, ref int nodes)
     {
+        RuntimeHelpers.EnsureSufficientExecutionStack();
         nodes++;
         switch (rule)
         {
@@ -513,20 +585,35 @@ internal sealed class MetricsCollector
     internal sealed class Frame
     {
         public Rule Rule = null!;
+        //! the call-tree node this execution landed on, or null once the node cap is hit
+        public CallNode? Node;
         public long StartAlloc;
         public long StartTs;
         public long ChildAlloc;
         public long ChildTs;
     }
 
+    //! call-tree nodes are bounded so a pathological grammar cannot blow up the payload without
+    //! limit; past the cap deeper calls simply fold into their parent's self figures.
+    private const int MaxNodes = 200000;
+
     private readonly Stack<Frame> _stack = new();
     //! keyed by rule identity: only top-level rules get a UID, nested children keep a null one
     private readonly Dictionary<Rule, RuleMetrics> _byRule = new();
     private readonly List<RuleMetrics> _order = [];
+    //! the merged call tree, node 0 is the root; `_children` finds a node by (parent, rule)
+    private readonly List<CallNode> _nodes = [];
+    private readonly Dictionary<CallNode, Dictionary<Rule, CallNode>> _children = new();
+    private readonly CallNode _root = new() { Index = 0, Parent = -1, Rule = -1 };
     private long _startAlloc;
     private long _startTs;
     private long _rootAlloc;
     private long _rootTs;
+
+    public MetricsCollector()
+    {
+        _nodes.Add(_root);
+    }
 
     public void Start()
     {
@@ -542,9 +629,38 @@ internal sealed class MetricsCollector
             StartAlloc = GC.GetAllocatedBytesForCurrentThread(),
             StartTs = Stopwatch.GetTimestamp()
         };
+        //! merge by (parent node, rule): the parent node already encodes the whole call path, so
+        //! occurrences reached the same way share a node and the children stay context-correct
+        var parent = _stack.Count > 0 ? _stack.Peek().Node : _root;
+        frame.Node = parent == null ? null : ChildNode(parent, rule);
+        if (frame.Node != null)
+        {
+            frame.Node.Executions++;
+        }
         ForRule(rule).Executions++;
         _stack.Push(frame);
         return frame;
+    }
+
+    private CallNode? ChildNode(CallNode parent, Rule rule)
+    {
+        if (!_children.TryGetValue(parent, out var byRule))
+        {
+            byRule = new Dictionary<Rule, CallNode>();
+            _children[parent] = byRule;
+        }
+        if (byRule.TryGetValue(rule, out var node))
+        {
+            return node;
+        }
+        if (_nodes.Count >= MaxNodes)
+        {
+            return null;
+        }
+        node = new CallNode { Index = _nodes.Count, Parent = parent.Index, Rule = ForRule(rule).Index };
+        byRule[rule] = node;
+        _nodes.Add(node);
+        return node;
     }
 
     internal void Exit(Frame frame, bool matched)
@@ -561,6 +677,13 @@ internal sealed class MetricsCollector
         metrics.SelfTime += TicksToTime(inclusiveTs - frame.ChildTs);
         if (matched) metrics.Matches++;
         else metrics.Failures++;
+        if (frame.Node != null)
+        {
+            frame.Node.AllocatedBytes += inclusiveAlloc;
+            frame.Node.Ticks += inclusiveTs;
+            if (matched) frame.Node.Matches++;
+            else frame.Node.Failures++;
+        }
         if (_stack.Count > 0)
         {
             var parent = _stack.Peek();
@@ -581,7 +704,7 @@ internal sealed class MetricsCollector
             return metrics;
         }
         string name = string.IsNullOrEmpty(rule.Name) ? (rule.Value ?? rule.GetType().Name) : rule.Name;
-        metrics = new RuleMetrics { Name = name, Type = rule.GetType().Name, Value = rule.Value };
+        metrics = new RuleMetrics { Index = _order.Count, Name = name, Type = rule.GetType().Name, Value = rule.Value };
         _byRule[rule] = metrics;
         _order.Add(metrics);
         return metrics;
@@ -591,9 +714,14 @@ internal sealed class MetricsCollector
     {
         long totalAlloc = GC.GetAllocatedBytesForCurrentThread() - _startAlloc;
         long totalTs = Stopwatch.GetTimestamp() - _startTs;
+        foreach (var node in _nodes)
+        {
+            node.TotalTime = TicksToTime(node.Ticks);
+        }
         return new ParseMetrics
         {
             Rules = _order,
+            Tree = _nodes,
             TotalAllocatedBytes = totalAlloc,
             TotalElapsed = TicksToTime(totalTs),
             UnattributedAllocatedBytes = Math.Max(0, totalAlloc - _rootAlloc),
