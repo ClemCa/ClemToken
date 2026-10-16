@@ -201,5 +201,26 @@ namespace ClemToken
         {
             return Tree.Children[status];
         }
+        // flatten the parsed tree into a token list. `leavesOnly` returns the concrete terminals
+        // (what tooling usually colors); otherwise every node is emitted, parents before children.
+        // Order within a node follows the source, so leaves come out in source order.
+        public List<Token> Flatten(bool leavesOnly = true, bool includeIgnored = false)
+        {
+            List<Token> tokens = [];
+            Collect(History[0].Tree, tokens, leavesOnly, includeIgnored);
+            return tokens;
+        }
+        static void Collect(Tree tree, List<Token> tokens, bool leavesOnly, bool includeIgnored)
+        {
+            bool isLeaf = tree.Children.Count == 0;
+            if ((!leavesOnly || isLeaf) && (includeIgnored || !tree.Token.Ignored))
+            {
+                tokens.Add(tree.Token);
+            }
+            foreach (var child in tree.Children)
+            {
+                Collect(child, tokens, leavesOnly, includeIgnored);
+            }
+        }
     }
 }

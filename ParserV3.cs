@@ -66,6 +66,15 @@ class Optimizations
     //! restored around each rule check, so it always reflects the enclosing scope during a check.
     public bool ExplicitSpacing;
 
+    //! global spacing mode: when true, implicit whitespace skipping only consumes horizontal
+    //! whitespace, so a line break is significant. A line-oriented grammar (e.g. the DSL) uses this
+    //! to keep a rule body from running past the end of its line. Set from the `$spacing` spec.
+    public bool HorizontalSpacing;
+
+    // whether `c` may be skipped as inter-token whitespace under the current spacing mode
+    public bool IsSkippableWhitespace(char c)
+        => char.IsWhiteSpace(c) && !(HorizontalSpacing && (c == '\n' || c == '\r'));
+
     //! furthest cursor any successful match reached during the current top-level match attempt. Error
     //! recovery uses it as the end of a failed region: a lower-priority root whose match stops short of
     //! it is only a fragment of a higher-priority rule that got further, so the whole region becomes one
@@ -303,11 +312,25 @@ abstract class Checker
     public abstract int GetMatch(Span<char> text);
     public abstract int GetMatch(ReadOnlySpan<char> text);
     public abstract int GetMatchLength(string text);
+    //! length of the match when it is required to start at index 0 of `text`, or -1 when nothing
+    //! matches there. A plain unanchored probe assumes a one-character minimum, so a spec whose
+    //! shortest match is longer (e.g. `\\[\[\]()]`) would never be attempted
+    public abstract int MatchAtStartLength(ReadOnlySpan<char> text);
 }
 
 class RegexChecker(string regexString) : Checker
 {
     private Regex _regex = new(regexString);
+    public override int MatchAtStartLength(ReadOnlySpan<char> text)
+    {
+        //! the enumerator yields the leftmost match without materializing it, so an index of 0 means
+        //! a match starts exactly at the cursor (a match there would always be the leftmost)
+        foreach (var match in _regex.EnumerateMatches(text))
+        {
+            return match.Index == 0 ? match.Length : -1;
+        }
+        return -1;
+    }
     public override bool IsMatch(string text)
     {
         return _regex.IsMatch(text);
@@ -366,6 +389,17 @@ class RegexChecker(string regexString) : Checker
 
 class SimpleChecker(string checkString) : Checker
 {
+    public override int MatchAtStartLength(ReadOnlySpan<char> text)
+    {
+        if (text.Length < checkString.Length)
+            return -1;
+        for (int i = 0; i < checkString.Length; i++)
+        {
+            if (text[i] != checkString[i])
+                return -1;
+        }
+        return checkString.Length;
+    }
     public override bool IsMatch(string text)
     {
         return text.StartsWith(checkString);
@@ -533,15 +567,20 @@ class ParserV3
         string cleanedCode = CleanSource(specs, code);
         Logger.Log("Cleaned source:\n" + cleanedCode);
         Logger.Log("--------------------------------------------------");
+        //! comment cleaning is length-preserving, so offsets survive it; resolve coordinates against
+        //! the original source so multi-line comments don't collapse the line numbers after them
+        int[] lineStarts = BuildLineStarts(code);
+        string spacingMode = specStore.GetSpecDefinition("spacing", "implicit").Trim();
         Optimizations optimizations = new()
         {
             Metrics = metrics,
-            ExplicitSpacing = specStore.GetSpecDefinition("spacing", "implicit").Trim().Equals("explicit", StringComparison.OrdinalIgnoreCase)
+            ExplicitSpacing = spacingMode.Equals("explicit", StringComparison.OrdinalIgnoreCase),
+            HorizontalSpacing = spacingMode.Equals("horizontal", StringComparison.OrdinalIgnoreCase)
         };
         AntiCompute.ApplySpecs(specStore);
         try
         {
-            return Parse(cleanedCode, rules, specStore, referenceStore, optimizations);
+            return Parse(cleanedCode, rules, specStore, referenceStore, optimizations, lineStarts);
         }
         catch (StackOverflowException)
         {
@@ -660,6 +699,20 @@ class ParserV3
         }
         return new string(result);
     }
+    // offsets of the first character of each line; index 0 is always 0 and one entry is added after
+    // every '\n', so a binary search yields the 1-based (line, column) of any offset
+    internal static int[] BuildLineStarts(string code)
+    {
+        List<int> starts = [0];
+        for (int i = 0; i < code.Length; i++)
+        {
+            if (code[i] == '\n')
+            {
+                starts.Add(i + 1);
+            }
+        }
+        return [.. starts];
+    }
     static bool SearchForEscape(char[] text, List<Checker> escapeCheckers)
     {
         foreach (var checker in escapeCheckers)
@@ -679,13 +732,15 @@ class ParserV3
     {
         if (target.Children.Count == 0)
         {
-            target.Token.Value = code[target.Token.Line..(target.Token.Line + target.Token.Value.Length + by)];
+            target.Token.Value = code[target.Token.Start..(target.Token.Start + target.Token.Value.Length + by)];
+            target.Token.End = target.Token.Start + target.Token.Value.Length;
             Logger.Log($"Expanded node by {by} to: \"{target.Token.Value}\" (size {target.Token.Value.Length})", 1);
             return target;
         }
         var lastNode = target.Children[^1];
         target.Children[^1] = ExpandLastNode(lastNode, code, by);
-        target.Token.Value = code[target.Token.Line..(target.Token.Line + target.Token.Value.Length + by)];
+        target.Token.Value = code[target.Token.Start..(target.Token.Start + target.Token.Value.Length + by)];
+        target.Token.End = target.Token.Start + target.Token.Value.Length;
         return target;
     }
 
@@ -779,6 +834,8 @@ class ParserV3
                     var rt = tree.Value;
                     rt.Token.Value = code[line..r.Cursor] + rt.Token.Value;
                     rt.Token.Line = line;
+                    rt.Token.Start = line;
+                    rt.Token.End = r.Cursor;
                     tree = rt;
                 }
                 return r with { Tree = tree, Slack = WrapSimpleSlack(r.Slack, code, line) };
@@ -816,28 +873,28 @@ class ParserV3
         }
         return newChildren;
     }
-    public static Tree Parse(string code, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, Optimizations optimizations)
+    public static Tree Parse(string code, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, Optimizations optimizations, int[]? lineStarts = null)
     {
         var tree = new Tree(new Token("Root", "", 0, 0, false), []);
+        lineStarts ??= BuildLineStarts(code);
         int cursor = 0;
-        int lastIndex = 0;
-        int lastLine = 1;
-        int lastColumn = 1;
+        //! resolve any character offset to a 1-based (line, column). Indices are not visited in
+        //! increasing order (a parent is addressed after its children) and comment cleaning keeps
+        //! offsets but not lines, so a binary search over precomputed line starts is both correct
+        //! and order-independent.
         (int, int) GetCoordinates(int index)
         {
-            for (; lastIndex < index; lastIndex++)
+            if (index < 0) index = 0;
+            else if (index > code.Length) index = code.Length;
+            int lo = 0;
+            int hi = lineStarts.Length - 1;
+            while (lo < hi)
             {
-                if (code[lastIndex] == '\n')
-                {
-                    lastLine++;
-                    lastColumn = 1;
-                }
-                else
-                {
-                    lastColumn++;
-                }
+                int mid = (lo + hi + 1) >> 1;
+                if (lineStarts[mid] <= index) lo = mid;
+                else hi = mid - 1;
             }
-            return (lastLine, lastColumn);
+            return (lo + 1, index - lineStarts[lo] + 1);
         }
         Tree WithCoordinates(Tree tree)
         {
@@ -845,9 +902,12 @@ class ParserV3
             {
                 tree.Children[i] = WithCoordinates(tree.Children[i]);
             }
-            var (line, column) = GetCoordinates(tree.Token.Line);
+            var (line, column) = GetCoordinates(tree.Token.Start);
+            var (endLine, endColumn) = GetCoordinates(tree.Token.End);
             tree.Token.Line = line;
             tree.Token.Column = column;
+            tree.Token.EndLine = endLine;
+            tree.Token.EndColumn = endColumn;
             return tree;
         }
         //! record one Error covering [start, end); merge it with an immediately preceding Error so a failed
@@ -865,19 +925,20 @@ class ParserV3
             if (tree.Children.Count > 0)
             {
                 var last = tree.Children[^1];
-                if (last.Token.Name == "Error" && last.Token.Line + last.Token.Value.Length == start)
+                if (last.Token.Name == "Error" && last.Token.End == start)
                 {
-                    last.Token.Value = code[last.Token.Line..end];
+                    last.Token.Value = code[last.Token.Start..end];
+                    last.Token.End = end;
                     tree.Children[^1] = last;
                     return;
                 }
             }
-            tree.Children.Add(new Tree(new Token("Error", code[start..end], start, 0, false), []));
+            tree.Children.Add(new Tree(new Token("Error", code[start..end], start, end, false), []));
         }
         int expandLimit = 0;
         while (cursor < code.Length)
         {
-            if (!optimizations.ExplicitSpacing && char.IsWhiteSpace(code[cursor]))
+            if (!optimizations.ExplicitSpacing && optimizations.IsSkippableWhitespace(code[cursor]))
             {
                 // Skip whitespace in-between rules
                 cursor++;
@@ -885,44 +946,32 @@ class ParserV3
             }
             if (Match(code, cursor, rules, specStore, referenceStore, out Tree? foundTree, out int newCursor, out int matchExpandLimit, out Slack matchSlack, optimizations))
             {
-                //! a higher-priority rule consumed further before failing: this match is only a fragment
-                //! of it, so report the whole failed region as one Error and skip past it instead
-                if (newCursor < optimizations.FurthestReached)
-                {
-                    AddErrorSpan(cursor, optimizations.FurthestReached);
-                    cursor = optimizations.FurthestReached;
-                    expandLimit = 0;
-                    optimizations.DefinitiveProgression(cursor);
-                    continue;
-                }
-                cursor = newCursor;
+                Tree? currentTree = foundTree;
+                int matchedCursor = newCursor;
                 //! a name-like token can still absorb the rest of its run; take it now instead of letting a
                 //! following root match split it into one-character fragments
-                if (matchExpandLimit > 0 && foundTree.HasValue)
+                if (matchExpandLimit > 0 && currentTree.HasValue)
                 {
-                    foundTree = ExpandLastNode(foundTree.Value, code, matchExpandLimit);
-                    cursor += matchExpandLimit;
+                    currentTree = ExpandLastNode(currentTree.Value, code, matchExpandLimit);
+                    matchedCursor += matchExpandLimit;
                     matchExpandLimit = 0;
                 }
-                expandLimit = matchExpandLimit;
-                optimizations.DefinitiveProgression(cursor);
-                if (foundTree == null)
-                    continue;
-                tree.Children.Add(foundTree.Value);
+                int matchedExpandLimit = matchExpandLimit;
                 //! consume the match's slack one step at a time: at top level nothing follows to demand
-                //! it, so this loop drives the continuation until nothing more can be consumed
+                //! it, so this loop drives the continuation until nothing more can be consumed. It runs
+                //! before the fragment test below so a lazy match that can still reach that far is kept.
+                var slackCheckpoint = optimizations.Mark();
                 Slack lastSlack = matchSlack;
                 while (lastSlack.More != null)
                 {
                     var extensionCheckpoint = optimizations.Mark();
                     var extended = lastSlack.More();
-                    if (extended.Ok && extended.Tree.HasValue && extended.Cursor > cursor)
+                    if (extended.Ok && extended.Tree.HasValue && extended.Cursor > matchedCursor)
                     {
-                        cursor = extended.Cursor;
-                        tree.Children[^1] = extended.Tree.Value;
-                        expandLimit = extended.ExpandLimit;
+                        matchedCursor = extended.Cursor;
+                        currentTree = extended.Tree;
+                        matchedExpandLimit = extended.ExpandLimit;
                         lastSlack = extended.Slack;
-                        optimizations.DefinitiveProgression(cursor);
                     }
                     else
                     {
@@ -930,13 +979,31 @@ class ParserV3
                         break;
                     }
                 }
+                //! a higher-priority rule consumed further before failing: this match is only a fragment
+                //! of it, so report the whole failed region as one Error and skip past it instead
+                if (matchedCursor < optimizations.FurthestReached)
+                {
+                    optimizations.Rollback(slackCheckpoint);
+                    AddErrorSpan(cursor, optimizations.FurthestReached);
+                    cursor = optimizations.FurthestReached;
+                    expandLimit = 0;
+                    optimizations.DefinitiveProgression(cursor);
+                    continue;
+                }
+                cursor = matchedCursor;
+                expandLimit = matchedExpandLimit;
+                optimizations.DefinitiveProgression(cursor);
+                if (currentTree != null)
+                {
+                    tree.Children.Add(currentTree.Value);
+                }
             }
             else
             {
-                if (!optimizations.ExplicitSpacing && char.IsWhiteSpace(code[cursor]))
+                if (!optimizations.ExplicitSpacing && optimizations.IsSkippableWhitespace(code[cursor]))
                 {
                     expandLimit = 0; // Reset expand limit on whitespace
-                    while (cursor < code.Length && char.IsWhiteSpace(code[cursor]))
+                    while (cursor < code.Length && optimizations.IsSkippableWhitespace(code[cursor]))
                     {
                         cursor++; // Skip whitespace
                     }
@@ -1137,6 +1204,8 @@ class ParserV3
                         var rt = ruleTree.Value;
                         rt.Token.Value = code[cursor..newCursor] + rt.Token.Value;
                         rt.Token.Line = cursor;
+                        rt.Token.Start = cursor;
+                        rt.Token.End = newCursor;
                         ruleTree = rt;
                     }
                     slack = WrapSimpleSlack(slack, code, cursor);
@@ -1255,19 +1324,26 @@ class ParserV3
                         if (specStore.HasSpec(reserved.Name)) // custom equivalent to name, except with support for starting with a whitespace
                         {
                             Checker customRgx = specStore.GetSpec(reserved.Name, @".");
-                            if (!customRgx.IsMatch(code[cursor..(cursor + 1)]))
+                            int matched = customRgx.MatchAtStartLength(code.AsSpan(cursor));
+                            if (matched <= 0)
                             {
                                 ruleTree = null;
                                 return false;
                             }
-                            newCursor = cursor + 1;
-                            var maxCursor = newCursor;
+                            int maxCursor = cursor + matched;
+                            //! an anchored match is greedy, but a shorter alternation can win (e.g. `a|ab`),
+                            //! so keep growing while the whole prefix still matches
                             while (maxCursor < code.Length && customRgx.FullMatch(code[cursor..(maxCursor + 1)]))
                             {
                                 maxCursor++;
                             }
-                            expandLimit = Math.Max(0, maxCursor - newCursor);
-                            slack = new Slack(0, expandLimit);
+                            //! custom specs take their maximal match up front. Unlike the built-in `name`
+                            //! (which starts at one char and is extended by a demanding sibling), a custom
+                            //! regex is a self-contained shape, so a terminal use still consumes the whole
+                            //! token instead of leaking its tail into the next match.
+                            newCursor = maxCursor;
+                            expandLimit = 0;
+                            slack = new Slack(0, 0);
                             ruleTree = new Tree(new Token(reserved.Name, code[cursor..newCursor], cursor, newCursor, reserved.Ignored), []);
                             return true;
                         }

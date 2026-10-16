@@ -395,17 +395,24 @@ namespace ClemToken
                 string rest = line[(colonIndex + 1)..].Trim();
                 string mode = "";
                 int modeColonIndex = rest.IndexOf(':');
-                if (modeColonIndex != -1)
+                if (modeColonIndex > 0)
                 {
                     string modeString = rest[..modeColonIndex].Trim();
-                    bool isValid = true;
-                    for (int i = 0; i < modeString.Length; i++)
+                    // a mode is a bare identifier directly followed by `:` and then whitespace (e.g.
+                    // `$comment_begin:simple: /*`). Requiring both keeps colons that belong to the
+                    // definition from being swallowed: `$colon: :` and `$x: [0-9]+:[0-9]+` stay intact.
+                    bool isValid = modeString.Length > 0;
+                    for (int i = 0; isValid && i < modeString.Length; i++)
                     {
-                        if (char.IsWhiteSpace(modeString[i]))
+                        char c = modeString[i];
+                        if (!char.IsLetterOrDigit(c) && c != '_')
                         {
                             isValid = false;
-                            break;
                         }
+                    }
+                    if (isValid && modeColonIndex + 1 < rest.Length && !char.IsWhiteSpace(rest[modeColonIndex + 1]))
+                    {
+                        isValid = false;
                     }
                     if (isValid)
                     {
@@ -466,7 +473,9 @@ namespace ClemToken
 
         private static Rule ParseLine(string line, bool inAnchor = false)
         {
-            if (line.StartsWith('#'))
+            // a leading `#` only starts a comment at the top level: inside an anchor body it is a
+            // normal token, so a rule like `@comment: # $[rest]` can describe comment lines
+            if (line.StartsWith('#') && !inAnchor)
             {
                 return new ProcessRule(); // comment
             }

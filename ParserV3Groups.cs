@@ -103,7 +103,18 @@ class GroupParser
             int curMax = max == -1 ? int.MaxValue : max;
             if (variable && succ < curMax)
             {
-                return new Slack(curMax - succ, expLimit, () => ExtendPass(inst, cur, expandAll, expLimit, expBy, succ));
+                //! another pass is preferred while the repeat can still take one, but a repeat stopped by
+                //! the source (no next separator) must still be able to grow its last pass: when the next
+                //! pass does not match, fall back to extending the content of the pass already taken
+                return new Slack(curMax - succ, expLimit, () =>
+                {
+                    var r = ExtendPass(inst, cur, expandAll, expLimit, expBy, succ);
+                    if (r.Ok || carry.More == null)
+                    {
+                        return r;
+                    }
+                    return ExtendContent(inst, cur, expandAll, expLimit, expBy, succ, carry);
+                });
             }
             if (carry.More != null)
             {
@@ -177,7 +188,7 @@ class GroupParser
                 return inst[0];
             }
             int start = inst[0].Token.Line;
-            return new Tree(new Token(group.Name+"*", code[start..end], start, 0, group.Ignored), inst);
+            return new Tree(new Token(group.Name+"*", code[start..end], start, end, group.Ignored), inst);
         }
     }
 
@@ -202,7 +213,7 @@ class GroupParser
                 return false;
             }
             int start = children.Count > 0 ? children[0].Token.Line : cursor;
-            ruleTree = new Tree(new Token(group.Name, code[start..newCursor], start, 0, group.Ignored), children);
+            ruleTree = new Tree(new Token(group.Name, code[start..newCursor], start, newCursor, group.Ignored), children);
             return true;
         }
         finally
@@ -384,7 +395,7 @@ class GroupParser
                 if (ResolveFrom(0, groupStart, groupStartExpand, [], [], out int eC, out int eE, out int eEB, out var eSlack, out var eChildren, overrideIndex: j, overrideResult: r))
                 {
                     int start = eChildren.Count > 0 ? eChildren[0].Token.Line : groupStart;
-                    var tree = new Tree(new Token(group.Name, code[start..eC], start, 0, group.Ignored), eChildren);
+                    var tree = new Tree(new Token(group.Name, code[start..eC], start, eC, group.Ignored), eChildren);
                     return new ExtendResult(true, eC, eE, eEB, tree, eSlack);
                 }
             }
@@ -428,7 +439,7 @@ class GroupParser
             {
                 return false;
             }
-            if (!optimizations.ExplicitSpacing && char.IsWhiteSpace(code[targetCursor]) && (regularExpansion == 0 || regularExpansion >= expandAllowed)) // can only expand whitespace before or after a token
+            if (!optimizations.ExplicitSpacing && optimizations.IsSkippableWhitespace(code[targetCursor]) && (regularExpansion == 0 || regularExpansion >= expandAllowed)) // can only expand whitespace before or after a token
             {
                 targetCursor++;
                 expanded++;

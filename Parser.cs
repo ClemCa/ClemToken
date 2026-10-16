@@ -14,15 +14,28 @@ namespace ClemToken
     {
         public string Name;
         public string Value;
+        // Line/Column are the 1-based start position once the tree has been addressed.
         public int Line;
         public int Column;
+        // 1-based exclusive end position (the edit point right after the token).
+        public int EndLine;
+        public int EndColumn;
+        // absolute character offsets into the source; valid for the token's whole lifetime,
+        // unlike Line/Column which are only meaningful after coordinate resolution.
+        public int Start;
+        public int End;
         public bool Ignored;
         public Token(string name, string value, int line, int column, bool ignored = false)
         {
             Name = name;
             Value = value;
+            // during parsing the parser passes offsets here: start in `line`, end in `column`.
             Line = line;
             Column = column;
+            Start = line;
+            End = column;
+            EndLine = 0;
+            EndColumn = 0;
             Ignored = ignored;
         }
     }

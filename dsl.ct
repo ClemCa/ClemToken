@@ -1,0 +1,87 @@
+# SPACING: the DSL is line-oriented, so a line break is significant. The parser skips only
+# horizontal whitespace, which keeps a rule body from running into the next line.
+$spacing: horizontal
+
+# NAME SPECS
+# WORD: like $name, matched greedily (custom specs take their maximal match)
+$name: [a-zA-Z_][a-zA-Z0-9_]*
+$word: [a-zA-Z_][a-zA-Z0-9_]*
+# REST: verbatim body capture to the end of the line
+$rest: [^\r\n]+
+# EOL: one or more line terminators; every statement consumes the newline(s) that end it.
+$eol: [\r\n]+
+# KEYWORD: a bare literal token (`;`, `=>`, `(`, `)`, `"`, `|=>`, ...). Only the DSL's structural
+# characters are excluded, so glued groups/optionals still win through their own rules. A leading
+# `|` is allowed when it stays glued to more text (`|=>`) but a lone `|` is not a keyword, so the
+# branch separator in `[a | b]` still wins.
+$keyword: \|?[^\s\[\]()@|:$]+
+# PROBE: the literal a lookahead searches for (`@>name`, `@>=`, `@>(`, `@>|`); may include `(`/`|`
+$probe: [^\s\[\]]+
+# ESCAPE: an escaped structural character (`\[`, `\]`)
+$escape: \\[\[\]()]
+# single-character structural specs
+$at: @
+$gt: >
+$qmark: \?
+$colon: :
+$pipe: \|
+$dollar: [$]+
+$lbracket: \[
+$rbracket: \]
+$lparen: \(
+$rparen: \)
+# AFFIX: a repeat/ignore suffix: optional `:`, then a quantifier or range (`?`, `+`, `*`, `1-3`, `_`, `:`)
+$affix: :?(\+|\?|\*|[0-9]+(-[0-9]+)?|_|:)
+
+# MAIN: a `.ct` file is a sequence of spec lines, comments and rule lines
+@statement: [@specline | @commentline | @ruleline]
+
+# SPEC LINES: `$target: body`
+@specline: $ $[word] : $[rest] $[eol]
+
+# COMMENTS: `# ...`
+@commentline: # $[rest] $[eol]
+
+# RULE LINES: `@anchor: body` (the anchor name may carry a trailing `?` marker, `@name?`).
+# `@ruleline_final` mirrors `@ruleline` without the line terminator so a last line with no trailing
+# newline still parses.
+@ruleline: @ $[word] ($[qmark])? : @body $[eol]
+@ruleline_final: @ $[word] ($[qmark])? : @body
+
+# BODY: a non-empty sequence of elements (groups, references, optionals, ...)
+@body: (@element)+
+# `@close_paren` is a last resort: a `)` that no group consumed (e.g. an unbalanced paren in the
+# source) is still a token rather than a parse error. It is tried last so groups own their closers.
+@element: [@lookahead | @optional | @group | @reference | @reserved | @suffix | @escaped | @simple | @close_paren]
+@close_paren: $[rparen]
+
+# ESCAPED LITERAL: `\[`, `\]` (an escape sequence the DSL treats as a literal character)
+@escaped: $[escape]
+
+# SUFFIX: the repeat/ignore marker that follows a group (`(...)`, `(...)+`, `(...):?`)
+@suffix: $[affix]
+
+# LOOKAHEADS: `@>name`, `@>>[a | b]` (the bracketed form is an optional with branches)
+@lookahead: [@optional_lookahead | @plain_lookahead]
+@optional_lookahead: $[at] $[gt] $[gt] $[lbracket] @optional_branch ($[pipe] @optional_branch)* ($[affix])? $[rbracket]
+@plain_lookahead: $[at] $[gt] $[probe]
+
+# OPTIONALS: `[a | b]` (a branch is a sequence of elements; a trailing suffix may follow the last one)
+@optional: $[lbracket] @optional_branch ($[pipe] @optional_branch)* ($[affix])? $[rbracket]
+@optional_branch: (@element)+
+
+# GROUPS: `prefix(name)suffix` (prefix and suffix optional)
+@group: ($[word] :)? $[lparen] @body $[rparen]
+
+# REFERENCES: `@name`, `?@name`, `tag:@name`, `tag:?@name`
+@reference: [@named_optional_reference | @named_reference | @optional_reference | @plain_reference]
+@named_optional_reference: $[word] : $[qmark] $[at] $[word]
+@named_reference: $[word] : $[at] $[word]
+@optional_reference: $[qmark] $[at] $[word]
+@plain_reference: $[at] $[word]
+
+# RESERVED SPECS: `$[name]`, `$$[name]`
+@reserved: $[dollar] $[lbracket] $[word] $[rbracket]
+
+# SIMPLE / KEYWORD
+@simple: $[keyword]
