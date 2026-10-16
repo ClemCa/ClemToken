@@ -2,9 +2,13 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <Version>1.7.1</Version>
+    <Version>1.7.2</Version>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- The Linux AOT binary ships inside the VS Code extension. Without this the runtime needs
+         libicu at startup and dies with "Couldn't find a valid ICU package" on any distro that
+         does not install it, so globalization stays invariant and self-contained instead. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 </Project>
