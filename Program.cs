@@ -113,6 +113,16 @@ namespace ClemToken
         {
             Logger.Mode = Logger.LogMode.Error;
 
+            //! the ambient console code page is not UTF-8 (OEM/ANSI on Windows), so editors that pipe
+            //! source in would get byte offsets and mangled values unless both directions are pinned;
+            //! a host with no console has nothing to pin and already defaults to UTF-8
+            try
+            {
+                Console.InputEncoding = new UTF8Encoding(false);
+                Console.OutputEncoding = new UTF8Encoding(false);
+            }
+            catch (IOException) { }
+
             //! -stats is order-independent: pull it (with an optional mode/format token) out before dispatch
             string? statsMode = null;
             string statsFormat = "table";
