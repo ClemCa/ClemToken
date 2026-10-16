@@ -405,7 +405,7 @@ class GroupParser
 
     static bool CheckChildWithExpansion(string code, int cursor, int expandAllowed, Rule child, SpecStore specStore, ReferenceStore referenceStore, out int newCursor, out Tree? ruleTree, out int expandLimit, out int expandedBy, out Slack slack, int depth, Optimizations optimizations)
     {
-        Logger.Log("Checking child "+child.Name+" with expansion allowed "+expandAllowed+ $" ({code[cursor..Math.Min(cursor+10, code.Length)]})", depth);
+        Logger.Log("Checking child "+child.Name+" with expansion allowed "+expandAllowed+ $" ({code.SafeSlice(cursor, cursor + 10)})", depth);
         newCursor = cursor;
         ruleTree = null;
         expandLimit = 0;

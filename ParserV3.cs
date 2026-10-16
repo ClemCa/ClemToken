@@ -1132,7 +1132,7 @@ class ParserV3
                 }
                 bool res = GroupParser.CheckGroup(code, cursor, expandAllowed, anchor, out newCursor, out ruleTree, out expandLimit, out expandedBy, out slack, depth, specStore, referenceStore, optimizations);
                 if (res) {
-                    Logger.Log($"Anchor matched: {anchor.Name} at cursor {cursor}->{newCursor} +{expandLimit}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                    Logger.Log($"Anchor matched: {anchor.Name} at cursor {cursor}->{newCursor} +{expandLimit}: ({ruleTree?.Token.Value}) | ({code.SafeSlice(cursor, cursor + 5)})", depth);
                 }
                 return res;
             case Optional optional:
@@ -1147,7 +1147,7 @@ class ParserV3
                     tempGroup.Children[0] = optional.Children[i]; // only child set here to avoid reallocation
                     if (GroupParser.CheckGroup(code, cursor, expandAllowed, tempGroup, out newCursor, out var optionalRuleTree, out expandLimit, out expandedBy, out slack, depth + 1, specStore, referenceStore, optimizations))
                     {
-                        Logger.Log($"Optional matched without expansion: {optional.Name} ({optional.Value}) at cursor {cursor}, for {optional.Children[i].Name} ({optional.Children[i].Value}): ({optionalRuleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                        Logger.Log($"Optional matched without expansion: {optional.Name} ({optional.Value}) at cursor {cursor}, for {optional.Children[i].Name} ({optional.Children[i].Value}): ({optionalRuleTree?.Token.Value}) | ({code.SafeSlice(cursor, cursor + 5)})", depth);
                         ruleTree = optionalRuleTree?.Children[0] ?? null; // unwrap the group
                         Logger.Log($"Ignored status: {optional.Ignored}", depth);
                         if (optional.Ignored && ruleTree.HasValue)
@@ -1161,7 +1161,7 @@ class ParserV3
                     }
                     else
                     {
-                        Logger.Log($"Optional not matched: {optional.Name} ({optional.Value}) at cursor {cursor} | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                        Logger.Log($"Optional not matched: {optional.Name} ({optional.Value}) at cursor {cursor} | ({code.SafeSlice(cursor, cursor + 5)})", depth);
                     }
                 }
                 expandLimit = expandAllowed;
@@ -1212,7 +1212,7 @@ class ParserV3
                 } else {
                     ruleTree = new Tree(new Token(simple.Name, simple.Value, cursor, newCursor, simple.Ignored), []);
                 }
-                Logger.Log($"Simple matched: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code[cursor..Math.Min(cursor + 5, code.Length)]})", depth);
+                Logger.Log($"Simple matched: {simple.Name} ({simple.Value}) at cursor {cursor}->{newCursor}: ({ruleTree?.Token.Value}) | ({code.SafeSlice(cursor, cursor + 5)})", depth);
                 return true;
             case Reserved reserved:
                 if (reserved.Children.Length > 0)
@@ -1297,7 +1297,7 @@ class ParserV3
                             expandLimit = Math.Max(0, maxCursor - newCursor);
                         }
                         slack = new Slack(0, expandLimit);
-                        Logger.Log($"Name regex match: {nameRgx} against '{code[cursor..(newCursor + expandLimit)]}' with expand limit {expandLimit}");
+                        Logger.Log($"Name regex match: {nameRgx} against '{code.SafeSlice(cursor, newCursor + expandLimit)}' with expand limit {expandLimit}");
                         return true;
                     case "greedy": // like a name, but once it latches on it expands to the end of the file
                         if (char.IsWhiteSpace(code[cursor]))
@@ -1448,7 +1448,7 @@ class ParserV3
                 {
                     foundIndex = LookaheadLookup(code, cursor, endSearch == -1 ? code.Length : endSearch, lookahead, optimizations, depth);
                 }
-                Logger.Log($"> Lookahead {lookahead.Name} ({lookahead.Value}) on {code[cursor..(foundIndex == -1 ? code.Length : foundIndex)]}", depth);
+                Logger.Log($"> Lookahead {lookahead.Name} ({lookahead.Value}) on {code.SafeSlice(cursor, foundIndex == -1 ? code.Length : foundIndex)}", depth);
                 if (foundIndex != -1)
                 {
                     ruleTree = null;
