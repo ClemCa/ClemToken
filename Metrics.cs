@@ -32,6 +32,10 @@ public sealed class RuleGrammarStats
 
 public sealed class GrammarStats
 {
+    //! version of the JSON contract. Bump on a breaking change (renamed/removed/retyped field);
+    //! additive fields keep the version, mirroring the syntax-token contract.
+    public const int SchemaVersion = 1;
+
     public int RuleCount { get; internal set; }
     public int SpecCount { get; internal set; }
     public int SimpleCount { get; internal set; }
@@ -88,6 +92,8 @@ public sealed class GrammarStats
     {
         var sb = new StringBuilder();
         sb.Append("{\n");
+        sb.Append($"  \"schema\": \"clemtoken.grammarStats\",\n");
+        sb.Append($"  \"version\": {SchemaVersion},\n");
         sb.Append($"  \"ruleCount\": {RuleCount},\n");
         sb.Append($"  \"specCount\": {SpecCount},\n");
         sb.Append($"  \"counts\": {{ \"simple\": {SimpleCount}, \"reserved\": {ReservedCount}, \"group\": {GroupCount}, \"reference\": {ReferenceCount}, \"anchor\": {AnchorCount}, \"optional\": {OptionalCount}, \"lookahead\": {LookaheadCount}, \"empty\": {EmptyCount}, \"nodes\": {TotalNodes} }},\n");
@@ -128,6 +134,10 @@ public sealed class RuleMetrics
 
 public sealed class ParseMetrics
 {
+    //! version of the JSON contract. Bump on a breaking change (renamed/removed/retyped field);
+    //! additive fields keep the version, mirroring the syntax-token contract.
+    public const int SchemaVersion = 1;
+
     public long TotalAllocatedBytes { get; internal set; }
     public TimeSpan TotalElapsed { get; internal set; }
     //! allocations outside any rule (source cleaning, coordinate assignment, tree cleanup, ...)
@@ -158,6 +168,8 @@ public sealed class ParseMetrics
     {
         var sb = new StringBuilder();
         sb.Append("{\n");
+        sb.Append($"  \"schema\": \"clemtoken.parseMetrics\",\n");
+        sb.Append($"  \"version\": {SchemaVersion},\n");
         sb.Append($"  \"totalAllocatedBytes\": {TotalAllocatedBytes},\n");
         sb.Append($"  \"totalElapsedMs\": {TotalElapsed.TotalMilliseconds.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)},\n");
         sb.Append($"  \"unattributedAllocatedBytes\": {UnattributedAllocatedBytes},\n");

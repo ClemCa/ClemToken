@@ -171,17 +171,19 @@ namespace ClemToken
 
             if (args.Length < 2)
             {
-                Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in | Tokenizer -f <grammar> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json] | Tokenizer -f <rule-file> -i <source> -tokens [json] | Tokenizer [-testG] <input> | Tokenizer [-testP] <input> <grammar>");
+                Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <rule-file> -i <source> | Tokenizer -f <rule-file> -t <text> | Tokenizer -f <rule-file> -in | Tokenizer -f <grammar|-> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json] | Tokenizer -f <rule-file> -i <source> -tokens [json] | Tokenizer [-testG] <input> | Tokenizer [-testP] <input> <grammar>");
                 return;
             }
             if (statsMode == "grammar")
             {
                 if (args.Length != 2 || args[0] != "-f")
                 {
-                    Console.WriteLine("Usage: Tokenizer -f <grammar> -stats grammar [json]");
+                    Console.WriteLine("Usage: Tokenizer -f <grammar|-> -stats grammar [json]");
                     return;
                 }
-                PrintStats(Utils.AnalyzeGrammarFile(args[1]), statsFormat);
+                //! `-f -` reads the grammar from stdin, so an editor can analyze the buffer it holds
+                //! without round-tripping it through a temp file (matches the `-in` convention below)
+                PrintStats(args[1] == "-" ? Console.In.ReadToEnd().AnalyzeGrammar() : Utils.AnalyzeGrammarFile(args[1]), statsFormat);
                 return;
             }
             if (args[0] == "-testG")
@@ -204,7 +206,7 @@ namespace ClemToken
                 string file = args[1];
                 if (args.Length < 3)
                 {
-                    Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <grammar> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json] | Tokenizer -f <rule-file> -i <source> -tokens [json]");
+                    Console.WriteLine("Usage: Tokenizer -f <grammar> -o <output> | Tokenizer -f <grammar|-> -stats grammar [json] | Tokenizer -f <rule-file> -i <source> -stats [parse] [json] | Tokenizer -f <rule-file> -i <source> -tokens [json]");
                     return;
                 }
                 if (args[2] == "-preload")
