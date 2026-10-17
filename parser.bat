@@ -1,1 +1,0 @@
-dotnet run ParserV3.test.cs -p:StartupObject=ParserV3Tester
