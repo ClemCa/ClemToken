@@ -1,9 +1,14 @@
-using System.Diagnostics;
-using System.Formats.Asn1;
-using System.Runtime.InteropServices;
 using System.Text;
 namespace ClemToken
 {
+    //! raised when a compiled grammar was produced by a different serializer version
+    internal sealed class GrammarFormatException(int expected, int actual)
+        : Exception($"Incompatible serialization version, expected {expected}, got {actual}")
+    {
+        public int Expected { get; } = expected;
+        public int Actual { get; } = actual;
+    }
+
     class Serializer
     {
         //! 1: initial version
@@ -19,7 +24,8 @@ namespace ClemToken
         //! 11: lookaheads with sub optionals
         //! 12: ignored optionals
         //! 13: spacing mode on rules
-        private const int Version = 13;
+        internal const int FormatVersion = 13;
+        internal const int TreeSchemaVersion = 1;
         public static string StringSerializeTree(Tree tree)
         {
             StringBuilder sb = new();
@@ -36,6 +42,50 @@ namespace ClemToken
                 StringSerializeTreeSub(child, stringBuilder, depth + 1);
             }
             stringBuilder.AppendLine(new string(' ', depth * 2) + ")");
+        }
+        public static string TreeToJson(Tree tree)
+        {
+            StringBuilder sb = new();
+            sb.Append("{\n");
+            sb.Append("  \"schema\": \"clemtoken.tree\",\n");
+            sb.Append("  \"version\": ").Append(TreeSchemaVersion).Append(",\n");
+            sb.Append("  \"tree\": ");
+            TreeToJsonNode(tree, sb, 1);
+            sb.Append("\n}\n");
+            return sb.ToString();
+        }
+        private static void TreeToJsonNode(Tree tree, StringBuilder sb, int depth)
+        {
+            string indent = new(' ', depth * 2);
+            string fields = new(' ', depth * 2 + 2);
+            var token = tree.Token;
+            sb.Append("{\n");
+            sb.Append(fields).Append("\"name\": \"").Append(StatFormat.Json(token.Name)).Append("\",\n");
+            sb.Append(fields).Append("\"value\": \"").Append(StatFormat.Json(token.Value)).Append("\",\n");
+            sb.Append(fields).Append("\"line\": ").Append(Math.Max(0, token.Line - 1)).Append(",\n");
+            sb.Append(fields).Append("\"character\": ").Append(Math.Max(0, token.Column - 1)).Append(",\n");
+            sb.Append(fields).Append("\"endLine\": ").Append(Math.Max(0, token.EndLine - 1)).Append(",\n");
+            sb.Append(fields).Append("\"endCharacter\": ").Append(Math.Max(0, token.EndColumn - 1)).Append(",\n");
+            sb.Append(fields).Append("\"start\": ").Append(token.Start).Append(",\n");
+            sb.Append(fields).Append("\"end\": ").Append(token.End).Append(",\n");
+            sb.Append(fields).Append("\"ignored\": ").Append(token.Ignored ? "true" : "false").Append(",\n");
+            sb.Append(fields).Append("\"children\": [");
+            if (tree.Children.Count == 0)
+            {
+                sb.Append("]\n");
+            }
+            else
+            {
+                sb.Append('\n');
+                for (int i = 0; i < tree.Children.Count; i++)
+                {
+                    sb.Append(fields).Append("  ");
+                    TreeToJsonNode(tree.Children[i], sb, depth + 2);
+                    sb.Append(i < tree.Children.Count - 1 ? ",\n" : "\n");
+                }
+                sb.Append(fields).Append("]\n");
+            }
+            sb.Append(indent).Append('}');
         }
         public static string DisplayRules(Rule[] rules)
         {
@@ -111,7 +161,7 @@ namespace ClemToken
         public static byte[] Serialize(Rule[] rules, Spec[] specs)
         {
             ByteBuffer bytes = new(writeMode: true);
-            Mirror((short)Version, bytes);
+            Mirror((short)FormatVersion, bytes);
             ByteBuffer specBytesBuffer = new(writeMode: true);
             foreach (var spec in specs)
             {
@@ -140,9 +190,9 @@ namespace ClemToken
             List<Rule> rules = [];
             ByteBuffer bytes = new(data);
             short version = Mirror((short)0, bytes);
-            if (version != Version)
+            if (version != FormatVersion)
             {
-                throw new Exception($"Incompatible serialization version, expected {Version}, got " + version);
+                throw new GrammarFormatException(FormatVersion, version);
             }
             int specBytes = Mirror(0, bytes);
             var specBuffer = new ByteBuffer(bytes.GetBytes(specBytes));

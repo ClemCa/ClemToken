@@ -47,7 +47,26 @@ namespace ClemToken
 
     class Tester
     {
-        public static void TestParser(string file, string grammar)
+        public static int TestParser(string file, string grammar, string? logPath = null)
+        {
+            StringWriter? writer = logPath is null ? null : new();
+            Action<string>? handler = null;
+            if (writer is not null)
+            {
+                handler = msg => writer.WriteLine(msg);
+                Logger.RawOutput += handler;
+            }
+            try
+            {
+                return TestParserCore(file, grammar);
+            }
+            finally
+            {
+                if (handler is not null) Logger.RawOutput -= handler;
+                if (writer is not null) File.WriteAllText(logPath!, writer.ToString());
+            }
+        }
+        private static int TestParserCore(string file, string grammar)
         {
             Console.WriteLine("[Parser Test]");
             if (!File.Exists(file))
@@ -62,8 +81,7 @@ namespace ClemToken
             var (rules, specs) = Generator.Generate(grammarText);
             var text = File.ReadAllText(file);
             int test = 0;
-            StringWriter writer = new();
-            Logger.RawOutput += (msg) => { writer.WriteLine(msg); };
+            int failures = 0;
             while (!string.IsNullOrWhiteSpace(text))
             {
                 test++;
@@ -79,6 +97,7 @@ namespace ClemToken
                     // string used_grammar = Serializer.DisplayRules(rules);
                     // Console.WriteLine("Used grammar:\n" + used_grammar);
                     Console.WriteLine("Test " + test + " errored: " + e.Message + "\n" + e.StackTrace);
+                    failures++;
                     continue;
                 }
                 try
@@ -93,11 +112,31 @@ namespace ClemToken
                     // Console.WriteLine("Used grammar:\n" + used_grammar);
                     Console.WriteLine("Test " + test + " failed: " + e.Message);
                     Console.WriteLine();
+                    failures++;
                 }
             }
-            File.WriteAllText("parse_log.txt", writer.ToString());
+            return failures;
         }
-        public static void TestGenerator(string file)
+        public static int TestGenerator(string file, string? logPath = null)
+        {
+            StringBuilder? log = logPath is null ? null : new();
+            Action<string>? handler = null;
+            if (log is not null)
+            {
+                handler = msg => log.Append(msg).Append('\n');
+                Logger.RawOutput += handler;
+            }
+            try
+            {
+                return TestGeneratorCore(file);
+            }
+            finally
+            {
+                if (handler is not null) Logger.RawOutput -= handler;
+                if (log is not null) File.WriteAllText(logPath!, log.ToString());
+            }
+        }
+        private static int TestGeneratorCore(string file)
         {
             Console.WriteLine("[Generator Test]");
             if (!File.Exists(file))
@@ -106,8 +145,7 @@ namespace ClemToken
             }
             var text = File.ReadAllText(file);
             int test = 0;
-            StringBuilder generate_log = new();
-            Logger.RawOutput += (msg) => { generate_log.Append(msg).Append('\n'); };
+            int failures = 0;
             while (!string.IsNullOrWhiteSpace(text))
             {
                 test++;
@@ -122,9 +160,10 @@ namespace ClemToken
                 catch (Exception e)
                 {
                     Console.WriteLine($"Test {test} failed: {e.Message}");
+                    failures++;
                 }
             }
-            File.WriteAllText("generate_log.txt", generate_log.ToString());
+            return failures;
         }
 
         static void DetailedComparison(Rule rule, TestingTree tree, int step = 0)
