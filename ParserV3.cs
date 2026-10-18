@@ -311,6 +311,8 @@ abstract class Checker
     public abstract int GetMatch(string text);
     public abstract int GetMatch(Span<char> text);
     public abstract int GetMatch(ReadOnlySpan<char> text);
+    public abstract bool IsMatch(string text, int start);
+    public abstract int GetMatch(string text, int start);
     public abstract int GetMatchLength(string text);
     //! length of the match when it is required to start at index 0 of `text`, or -1 when nothing
     //! matches there. A plain unanchored probe assumes a one-character minimum, so a spec whose
@@ -342,6 +344,11 @@ class RegexChecker(string regexString) : Checker
     public override bool IsMatch(ReadOnlySpan<char> text)
     {
         return _regex.IsMatch(text);
+    }
+
+    public override bool IsMatch(string text, int start)
+    {
+        return _regex.IsMatch(text, start);
     }
 
     public override bool ContainsMatch(string text) => IsMatch(text);
@@ -376,6 +383,11 @@ class RegexChecker(string regexString) : Checker
         lastLength = match.Success ? match.Length : -1;
         return match.Success ? match.Index : -1;
     }
+    public override int GetMatch(string text, int start)
+    {
+        var match = _regex.Match(text, start);
+        return match.Success ? match.Index : -1;
+    }
     public override int GetMatchLength(string text)
     {
         if (text == lastSearch) return lastLength;
@@ -403,6 +415,10 @@ class SimpleChecker(string checkString) : Checker
     public override bool IsMatch(string text)
     {
         return text.StartsWith(checkString);
+    }
+    public override bool IsMatch(string text, int start)
+    {
+        return text.IndexOf(checkString, start) >= 0;
     }
     public override bool IsMatch(Span<char> text)
     {
@@ -440,6 +456,10 @@ class SimpleChecker(string checkString) : Checker
         lastSearch = text;
         lastIndex = text.IndexOf(checkString);
         return lastIndex;
+    }
+    public override int GetMatch(string text, int start)
+    {
+        return text.IndexOf(checkString, start);
     }
     public override int GetMatch(Span<char> text)
     {
@@ -601,103 +621,134 @@ class ParserV3
         List<Checker> endCheckers = [.. specs.Where(s => s.Target == "comment_end").Select(s => SpecStore.GenerateChecker(s))];
         List<Checker> escapeCheckers = [.. specs.Where(s => s.Target == "comment_escape").Select(s => SpecStore.GenerateChecker(s))];
         char[] result = [.. code];
-        for (int i = 0; i < result.Length; i++)
+        int cursor = 0;
+        while (cursor < result.Length)
         {
-            while (i < result.Length && (result[i] == '\r' || result[i] == '\n'))
+            while (cursor < result.Length && (result[cursor] == '\r' || result[cursor] == '\n'))
             {
-                i++; // skip newlines
+                cursor++; // skip newlines
             }
-            Checker? earliestMatcher = null;
-            int earliestIndex = result.Length - i;
-            bool lineMatch = false;
-            foreach (var checker in commentCheckers)
+            if (cursor >= result.Length)
             {
-                var span = result.AsSpan(i);
-                if (checker.IsMatch(span))
+                break;
+            }
+
+            int lineStart = cursor;
+            int lineEnd = result.AsSpan(lineStart).IndexOfAny(['\r', '\n']);
+            lineEnd = lineEnd == -1 ? result.Length : lineStart + lineEnd;
+            string line = new(result, lineStart, lineEnd - lineStart);
+            int searchFrom = 0;
+
+            while (true)
+            {
+                Checker? earliestMatcher = null;
+                int earliestIndex = int.MaxValue;
+                bool lineMatch = false;
+                foreach (var checker in commentCheckers)
                 {
-                    int commentStart = checker.GetMatch(span);
-                    if (commentStart >= earliestIndex)
+                    //! `line` starts at the real beginning of the line, so a `^` in the
+                    //! comment spec means line start instead of the current scan offset.
+                    int commentStart = FindUnescaped(checker, line, result, lineStart, escapeCheckers, searchFrom);
+                    if (commentStart < 0 || commentStart >= earliestIndex)
                     {
                         continue;
-                    }
-                    if (SearchForEscape(result[i..(i + commentStart)], escapeCheckers))
-                    {
-                        continue; // skip this match, it's escaped
                     }
                     earliestMatcher = checker;
                     earliestIndex = commentStart;
                     lineMatch = true;
                 }
-            }
-            int newLineIndex = result.AsSpan(i).IndexOfAny(['\r', '\n']);
-            if (newLineIndex == -1)
-                newLineIndex = result.Length - i;
-            newLineIndex += i;
-            foreach (var checker in beginCheckers)
-            {
-                var match = new string(result[i..newLineIndex]);
-                if (checker is RegexChecker)
+                foreach (var checker in beginCheckers)
                 {
-                    throw new Exception("In the grammar it's a simple?");
-                }
-                if (checker.ContainsMatch(match))
-                {
-                    int beginMatch = checker.GetMatch(match);
-                    if (beginMatch >= earliestIndex)
+                    if (checker is RegexChecker)
+                    {
+                        throw new Exception("In the grammar it's a simple?");
+                    }
+                    int beginMatch = FindUnescaped(checker, line, result, lineStart, escapeCheckers, searchFrom);
+                    if (beginMatch < 0 || beginMatch >= earliestIndex)
                     {
                         continue;
-                    }
-                    if (SearchForEscape(result[i..(i + beginMatch)], escapeCheckers))
-                    {
-                        continue; // skip this match, it's escaped
                     }
                     earliestMatcher = checker;
                     earliestIndex = beginMatch;
                     lineMatch = false;
                 }
-            }
-            if (earliestMatcher != null)
-            {
+
+                if (earliestMatcher == null)
+                {
+                    cursor = lineEnd;
+                    break;
+                }
+
                 if (lineMatch)
                 {
-                    for (int j = i + earliestIndex; j < newLineIndex; j++)
+                    for (int j = lineStart + earliestIndex; j < lineEnd; j++)
                     {
                         result[j] = ' ';
                     }
-                    i = newLineIndex;
-                    continue;
+                    cursor = lineEnd;
+                    break;
                 }
+
                 // multiline
-                int k = i + earliestIndex;
+                int k = lineStart + earliestIndex;
                 Checker? earliestEndChecker = null;
-                string rest = new string(result[k..]);
-                int earliestEndIndex = rest.Length;
+                string rest = new(result, k, result.Length - k);
+                int earliestEndIndex = int.MaxValue;
                 foreach (var checker in endCheckers)
                 {
-                    if (checker.ContainsMatch(rest))
+                    int endMatch = FindUnescaped(checker, rest, result, k, escapeCheckers);
+                    if (endMatch < 0 || endMatch >= earliestEndIndex)
                     {
-                        int endMatch = checker.GetMatch(rest);
-                        if (endMatch >= earliestEndIndex)
-                        {
-                            continue;
-                        }
-                        if (SearchForEscape(result[k..(k + endMatch)], escapeCheckers))
-                        {
-                            continue; // skip this match, it's escaped
-                        }
-                        earliestEndChecker = checker;
-                        earliestEndIndex = endMatch;
+                        continue;
                     }
+                    earliestEndChecker = checker;
+                    earliestEndIndex = endMatch;
                 }
-                int limit = earliestEndChecker != null ? k + earliestEndIndex + earliestEndChecker.GetMatchLength(rest) : result.Length;
+                int limit = earliestEndChecker != null
+                    ? k + earliestEndIndex + earliestEndChecker.GetMatchLength(rest)
+                    : result.Length;
                 for (; k < limit; k++)
                 {
                     result[k] = ' ';
                 }
-                i = limit;
+                cursor = limit;
+                if (cursor >= lineEnd)
+                {
+                    break;
+                }
+
+                //! the block comment ended on this line; keep the real line start so a
+                //! later `//` is not mistaken for a line-leading comment
+                line = new(result, lineStart, lineEnd - lineStart);
+                searchFrom = cursor - lineStart;
             }
         }
         return new string(result);
+    }
+
+    //! first match of `checker` in `text` that is not escaped, or -1. `offset` is
+    //! the source position of `text[0]`, used to inspect the text before the match.
+    static int FindUnescaped(Checker checker, string text, char[] source, int offset, List<Checker> escapeCheckers, int searchFrom = 0)
+    {
+        int start = searchFrom;
+        while (start <= text.Length)
+        {
+            if (!checker.IsMatch(text, start))
+            {
+                return -1;
+            }
+            int index = checker.GetMatch(text, start);
+            if (index < 0)
+            {
+                return -1;
+            }
+            if (!SearchForEscape(source[offset..(offset + index)], escapeCheckers))
+            {
+                return index;
+            }
+            start = index + 1;
+        }
+        return -1;
     }
     // offsets of the first character of each line; index 0 is always 0 and one entry is added after
     // every '\n', so a binary search yields the 1-based (line, column) of any offset
