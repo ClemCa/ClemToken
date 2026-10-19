@@ -97,7 +97,7 @@ class Optimizations
     public readonly record struct Checkpoint(int Invalidated, int Lookahead, int Stack);
 
     private List<((string UID, int Cursor, bool Explicit, int Expand) key, bool hadPrevious, int previousDemand)> _invalidatedJournal = [];
-    private List<(int index, (string stack, (string UID, int foundIndex) signature) entry, bool added)> _lookaheadJournal = [];
+    private List<(int index, (string stack, (string UID, int probeIndex, int foundIndex) signature) entry, bool added)> _lookaheadJournal = [];
 
     public Checkpoint Mark() => new(_invalidatedJournal.Count, _lookaheadJournal.Count, searchStack.Count);
 
@@ -243,13 +243,18 @@ class Optimizations
         return _invalidated.TryGetValue(InvalidationKey(rule, cursor, expandAllowed), out var failingDemand) && failingDemand <= demand;
     }
     //! Lookahead uniqueness
-    private List<(string stack, (string UID, int foundIndex) signature)> _lookaheadCache = [];
-    public void CacheLookahead(Rule lookahead, int foundIndex, int depth)
+    //! Nested probes at the same start offset share occurrences (so a rule cannot silently reuse
+    //! the occurrence an enclosing lookahead just claimed). The start offset is part of the
+    //! signature: a probe reached after consuming input describes a different region and must not
+    //! inherit an ancestor's claimed occurrence, which is what made left-recursive rules skip their
+    //! own operators on a re-entry and lose valid matches.
+    private List<(string stack, (string UID, int probeIndex, int foundIndex) signature)> _lookaheadCache = [];
+    public void CacheLookahead(Rule lookahead, int probeIndex, int foundIndex, int depth)
     {
         string key = StackKey();
         Logger.Log($"Caching lookahead: {lookahead.Name} at index {foundIndex} with stack {key}", depth);
-        _lookaheadJournal.Add((_lookaheadCache.Count, (key, (lookahead.UID, foundIndex)), true));
-        _lookaheadCache.Add((key, (lookahead.UID, foundIndex)));
+        _lookaheadJournal.Add((_lookaheadCache.Count, (key, (lookahead.UID, probeIndex, foundIndex)), true));
+        _lookaheadCache.Add((key, (lookahead.UID, probeIndex, foundIndex)));
         LookaheadWrites++;
     }
     private void ClearLookahead()
@@ -265,12 +270,12 @@ class Optimizations
             }
         }
     }
-    public bool IsCached(Rule lookahead, int foundIndex)
+    public bool IsCached(Rule lookahead, int probeIndex, int foundIndex)
     {
         string key = StackKey();
         foreach (var entry in _lookaheadCache)
         {
-            if (key.StartsWith(entry.stack) && entry.signature.foundIndex == foundIndex && entry.signature.UID == lookahead.UID)
+            if (key.StartsWith(entry.stack) && entry.signature.probeIndex == probeIndex && entry.signature.foundIndex == foundIndex && entry.signature.UID == lookahead.UID)
             {
                 return true;
             }
@@ -484,16 +489,20 @@ class SimpleChecker(string checkString) : Checker
 
 class AntiCompute()
 {
-    private static int recursion_limit = 25;
+    //! optional hard ceiling on the reference stack. 0 (the default) means no ceiling: depth in a
+    //! recursive descent mirrors the input's nesting, so a fixed low value rejects valid deeply
+    //! nested sources. Real cycles are caught by the (rule, cursor) repeat checks below, and the
+    //! runtime stack is checked with EnsureSufficientExecutionStack before every reference.
+    private static int recursion_limit = 0;
     private static int recursion_repeat_limit = 5;
     public static void ApplySpecs(SpecStore specStore)
     {
-        recursion_limit = int.Parse(specStore.GetSpecDefinition("recursion_limit", "25"));
+        recursion_limit = int.Parse(specStore.GetSpecDefinition("recursion_limit", "0"));
         recursion_repeat_limit = int.Parse(specStore.GetSpecDefinition("recursion_repeat_limit", "5"));
     }
     public static bool Studying(Optimizations optimizations, Rule rule, int cursor)
     {
-        if (optimizations.SearchStackDepth > recursion_limit)
+        if (recursion_limit > 0 && optimizations.SearchStackDepth > recursion_limit)
         {
             optimizations.GuardAborts++;
             return false;
@@ -598,9 +607,13 @@ class ParserV3
             HorizontalSpacing = spacingMode.Equals("horizontal", StringComparison.OrdinalIgnoreCase)
         };
         AntiCompute.ApplySpecs(specStore);
+        //! rules that can reach themselves without consuming input form a left-recursive cycle. Their
+        //! parsed trees are normalised after matching so a right-nested chain becomes the left-nested
+        //! tree the grammar's left-recursive shape describes (e.g. `a - b - c` is `(a - b) - c`).
+        HashSet<string> leftRecursiveRules = FindLeftRecursiveRules(rules);
         try
         {
-            return Parse(cleanedCode, rules, specStore, referenceStore, optimizations, lineStarts);
+            return Parse(cleanedCode, rules, specStore, referenceStore, optimizations, lineStarts, leftRecursiveRules);
         }
         catch (StackOverflowException)
         {
@@ -750,6 +763,137 @@ class ParserV3
         }
         return -1;
     }
+    //! left recursion is a cycle in the "first reference" graph: from a rule's body, which rules can
+    //! be entered before any input is consumed. A rule is left-recursive when it is in a cycle.
+    static HashSet<string> FindLeftRecursiveRules(Rule[] rules)
+    {
+        Dictionary<string, Anchor> anchors = [];
+        foreach (var rule in rules)
+        {
+            if (rule is Anchor anchor)
+            {
+                anchors[anchor.Name] = anchor;
+            }
+        }
+        Dictionary<string, bool> nullable = [];
+        bool changed = true;
+        while (changed)
+        {
+            changed = false;
+            foreach (var (name, anchor) in anchors)
+            {
+                if (!nullable.GetValueOrDefault(name) && CanMatchEmpty(anchor, nullable))
+                {
+                    nullable[name] = true;
+                    changed = true;
+                }
+            }
+        }
+        Dictionary<string, HashSet<string>> edges = [];
+        foreach (var (name, anchor) in anchors)
+        {
+            HashSet<string> targets = [];
+            CollectLeadingReferences(anchor, nullable, targets);
+            edges[name] = targets;
+        }
+        HashSet<string> result = [];
+        foreach (var name in anchors.Keys)
+        {
+            HashSet<string> visited = [];
+            Queue<string> queue = new(edges[name]);
+            while (queue.Count > 0)
+            {
+                string target = queue.Dequeue();
+                if (target == name)
+                {
+                    result.Add(name);
+                    break;
+                }
+                if (!edges.TryGetValue(target, out var next) || !visited.Add(target))
+                {
+                    continue;
+                }
+                foreach (string entry in next)
+                {
+                    queue.Enqueue(entry);
+                }
+            }
+        }
+        return result;
+    }
+
+    static bool CanMatchEmpty(Rule rule, Dictionary<string, bool> nullable)
+    {
+        if (rule.Repeat.Item1 == 0)
+        {
+            return true;
+        }
+        switch (rule)
+        {
+            case Anchor anchor:
+                for (int i = 0; i < anchor.Children.Length; i++)
+                {
+                    if (!CanMatchEmpty(anchor.Children[i], nullable))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            case Group group:
+                for (int i = 0; i < group.Children.Length; i++)
+                {
+                    if (!CanMatchEmpty(group.Children[i], nullable))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            case Optional:
+            case Lookahead:
+                return true;
+            case Reference reference:
+                return nullable.GetValueOrDefault(reference.Name);
+            default:
+                return false;
+        }
+    }
+
+    static void CollectLeadingReferences(Rule rule, Dictionary<string, bool> nullable, HashSet<string> targets)
+    {
+        switch (rule)
+        {
+            case Anchor anchor:
+                foreach (var child in anchor.Children)
+                {
+                    CollectLeadingReferences(child, nullable, targets);
+                    if (!CanMatchEmpty(child, nullable))
+                    {
+                        break;
+                    }
+                }
+                break;
+            case Group group:
+                foreach (var child in group.Children)
+                {
+                    CollectLeadingReferences(child, nullable, targets);
+                    if (!CanMatchEmpty(child, nullable))
+                    {
+                        break;
+                    }
+                }
+                break;
+            case Optional optional:
+                foreach (var child in optional.Children)
+                {
+                    CollectLeadingReferences(child, nullable, targets);
+                }
+                break;
+            case Reference reference:
+                targets.Add(reference.Name);
+                break;
+        }
+    }
+
     // offsets of the first character of each line; index 0 is always 0 and one entry is added after
     // every '\n', so a binary search yields the 1-based (line, column) of any offset
     internal static int[] BuildLineStarts(string code)
@@ -924,7 +1068,7 @@ class ParserV3
         }
         return newChildren;
     }
-    public static Tree Parse(string code, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, Optimizations optimizations, int[]? lineStarts = null)
+    public static Tree Parse(string code, Rule[] rules, SpecStore specStore, ReferenceStore referenceStore, Optimizations optimizations, int[]? lineStarts = null, HashSet<string>? leftRecursiveRules = null)
     {
         var tree = new Tree(new Token("Root", "", 0, 0, false), []);
         lineStarts ??= BuildLineStarts(code);
@@ -1074,10 +1218,134 @@ class ParserV3
             }
         }
         Logger.Log($"Completed parsing at cursor {cursor}/{code.Length}");
+        tree = CleanIgnored(tree);
+        if (leftRecursiveRules != null && leftRecursiveRules.Count > 0)
+        {
+            tree = NormalizeLeftRecursion(tree, code, leftRecursiveRules);
+        }
         var addressedTree = WithCoordinates(tree);
-        addressedTree = CleanIgnored(addressedTree);
         // Logger.Log($"Parsed tree: {Serializer.StringSerializeTree(addressedTree)}", depth);
         return addressedTree;
+    }
+
+    //! rotate a right-nested chain of a left-recursive rule into the left-nested tree the grammar
+    //! describes. Only nodes whose right operand is the same rule ending at the same offset take part,
+    //! so explicit grouping (whose wrapper covers the closing token) and calls keep their shape.
+    static Tree NormalizeLeftRecursion(Tree tree, string code, HashSet<string> leftRecursiveRules)
+    {
+        if (leftRecursiveRules.Contains(tree.Token.Name) && tree.Children.Count >= 2 && TryFlattenLeftRecursion(tree, code, out Tree flattened))
+        {
+            tree = flattened;
+        }
+        for (int i = 0; i < tree.Children.Count; i++)
+        {
+            tree.Children[i] = NormalizeLeftRecursion(tree.Children[i], code, leftRecursiveRules);
+        }
+        return tree;
+    }
+
+    static bool TryFlattenLeftRecursion(Tree tree, string code, out Tree result)
+    {
+        result = tree;
+        List<Tree> operands = [tree.Children[0]];
+        List<List<Tree>> middles = [tree.Children.GetRange(1, tree.Children.Count - 2)];
+        Tree current = tree;
+        while (TryFindRightContinuation(current, out Tree next))
+        {
+            operands.Add(next.Children[0]);
+            middles.Add(next.Children.GetRange(1, next.Children.Count - 2));
+            current = next;
+        }
+        if (operands.Count == 1)
+        {
+            return false;
+        }
+        Tree right = current.Children[^1];
+        Tree accumulator = operands[0];
+        for (int i = 0; i < middles.Count; i++)
+        {
+            bool last = i == middles.Count - 1;
+            Tree rightOperand = last ? right : RenameWrapperLike(tree.Children[^1], operands[i + 1], code);
+            int start = tree.Token.Start;
+            int end = rightOperand.Token.End;
+            List<Tree> children = [i == 0 ? tree.Children[0] : WrapLike(tree.Children[0], accumulator, code)];
+            children.AddRange(middles[i]);
+            children.Add(rightOperand);
+            Token token = tree.Token;
+            token.Start = start;
+            token.End = end;
+            token.Value = code[start..end];
+            accumulator = new Tree(token, children);
+        }
+        result = accumulator;
+        return true;
+    }
+
+    static bool TryFindRightContinuation(Tree tree, out Tree found)
+    {
+        found = default;
+        if (tree.Children.Count < 2)
+        {
+            return false;
+        }
+        return TryFindRightContinuation(tree.Children[^1], tree.Token.Name, tree.Token.Start, tree.Token.End, ref found);
+    }
+
+    static bool TryFindRightContinuation(Tree tree, string name, int after, int end, ref Tree found)
+    {
+        //! a continuation is the outermost same-rule node that starts after this node's left side and
+        //! ends with it; descendants start no earlier, so an exact node match is already the best one
+        if (tree.Token.Name == name && tree.Token.Start > after && tree.Token.End == end)
+        {
+            found = tree;
+            return true;
+        }
+        if (tree.Token.End != end)
+        {
+            return false;
+        }
+        foreach (var child in tree.Children)
+        {
+            if (child.Token.End != end)
+            {
+                continue;
+            }
+            if (TryFindRightContinuation(child, name, after, end, ref found))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    //! clone the shallow wrapper chain around an operand (e.g. `left -> expression -> ...`) so a
+    //! rebuilt node keeps the grammar's container names, updating only the covered span
+    static Tree WrapLike(Tree template, Tree content, string code)
+    {
+        Token token = template.Token;
+        token.Start = content.Token.Start;
+        token.End = content.Token.End;
+        token.Value = code[token.Start..token.End];
+        if (template.Children.Count == 1)
+        {
+            Tree inner = template.Children[0];
+            if (inner.Token.Start == template.Token.Start && inner.Token.End == template.Token.End)
+            {
+                Token innerToken = inner.Token;
+                innerToken.Start = token.Start;
+                innerToken.End = token.End;
+                innerToken.Value = token.Value;
+                return new Tree(token, [new Tree(innerToken, [content])]);
+            }
+        }
+        return new Tree(token, [content]);
+    }
+
+    static Tree RenameWrapperLike(Tree template, Tree content, string code)
+    {
+        content.Token.Name = template.Token.Name;
+        content.Token.Value = code[content.Token.Start..content.Token.End];
+        return content;
     }
 
 
@@ -1515,22 +1783,24 @@ class ParserV3
     //! an optional lookahead holds each alternative in its children, so the searched literal differs
     //! from the joined Value; the parent is kept as the cache identity while the value is passed in
     static int LookaheadLookup(string code, int startIndex, int endIndex, Rule lookahead, Optimizations optimizations, int depth)
-        => LookaheadLookup(code, startIndex, endIndex, lookahead, lookahead.Value!, optimizations, depth);
+        => LookaheadLookup(code, startIndex, startIndex, endIndex, lookahead, lookahead.Value!, optimizations, depth);
     static int LookaheadLookup(string code, int startIndex, int endIndex, Rule lookahead, string value, Optimizations optimizations, int depth)
+        => LookaheadLookup(code, startIndex, startIndex, endIndex, lookahead, value, optimizations, depth);
+    static int LookaheadLookup(string code, int startIndex, int probeIndex, int endIndex, Rule lookahead, string value, Optimizations optimizations, int depth)
     {
         int index = -1;
         while (index == -1 && startIndex < endIndex)
         {
             index = code.IndexOf(value, startIndex, endIndex - startIndex);
             if (index == -1) return -1;
-            if (optimizations.IsCached(lookahead, index))
+            if (optimizations.IsCached(lookahead, probeIndex, index))
             {
                 optimizations.LookaheadSkips++;
                 startIndex = index + 1; // skip this match and look for the next one
                 index = -1;
                 continue;
             }
-            optimizations.CacheLookahead(lookahead, index, depth);
+            optimizations.CacheLookahead(lookahead, probeIndex, index, depth);
         }
         return index;
     }
