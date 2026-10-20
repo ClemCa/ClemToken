@@ -763,8 +763,11 @@ class ParserV3
         }
         return -1;
     }
-    //! left recursion is a cycle in the "first reference" graph: from a rule's body, which rules can
-    //! be entered before any input is consumed. A rule is left-recursive when it is in a cycle.
+    //! left recursion that the post-parse normaliser can safely rotate is a *direct* leading
+    //! self-reference: the rule's own body can reach the same rule before consuming input. Mutual
+    //! leading cycles (`call -> method_call -> call` in the S# grammar) also parse right-nested, but
+    //! their nodes are not operator chains; rotating them would move a call's arguments onto the
+    //! wrong node. Those cycles are therefore left alone.
     static HashSet<string> FindLeftRecursiveRules(Rule[] rules)
     {
         Dictionary<string, Anchor> anchors = [];
@@ -789,34 +792,14 @@ class ParserV3
                 }
             }
         }
-        Dictionary<string, HashSet<string>> edges = [];
+        HashSet<string> result = [];
         foreach (var (name, anchor) in anchors)
         {
             HashSet<string> targets = [];
             CollectLeadingReferences(anchor, nullable, targets);
-            edges[name] = targets;
-        }
-        HashSet<string> result = [];
-        foreach (var name in anchors.Keys)
-        {
-            HashSet<string> visited = [];
-            Queue<string> queue = new(edges[name]);
-            while (queue.Count > 0)
+            if (targets.Contains(name))
             {
-                string target = queue.Dequeue();
-                if (target == name)
-                {
-                    result.Add(name);
-                    break;
-                }
-                if (!edges.TryGetValue(target, out var next) || !visited.Add(target))
-                {
-                    continue;
-                }
-                foreach (string entry in next)
-                {
-                    queue.Enqueue(entry);
-                }
+                result.Add(name);
             }
         }
         return result;
@@ -1294,8 +1277,10 @@ class ParserV3
     static bool TryFindRightContinuation(Tree tree, string name, int after, int end, ref Tree found)
     {
         //! a continuation is the outermost same-rule node that starts after this node's left side and
-        //! ends with it; descendants start no earlier, so an exact node match is already the best one
-        if (tree.Token.Name == name && tree.Token.Start > after && tree.Token.End == end)
+        //! ends with it; descendants start no earlier, so an exact node match is already the best one.
+        //! A same-named node with fewer than two children is a lookahead/wrapper, not an operation,
+        //! and cannot supply the left operand + middle + right operand shape flattened below.
+        if (tree.Token.Name == name && tree.Token.Start > after && tree.Token.End == end && tree.Children.Count >= 2)
         {
             found = tree;
             return true;

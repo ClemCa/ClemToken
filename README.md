@@ -264,7 +264,7 @@ ClemToken --version
 `--version` prints both the CLI version and the compiled-grammar format:
 
 ```text
-ClemToken 1.8.1 (grammar format 13)
+ClemToken 1.8.3 (grammar format 13)
 ```
 
 ### Exit codes

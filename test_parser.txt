@@ -658,3 +658,91 @@ mark;
         )
     )
 )
+nested.call().anotherCall();
+(
+    Name: Root
+    (
+        Name: statement
+        Value: nested.call().anotherCall();
+        (
+            Name: chain_call
+            Value: nested.call().anotherCall()
+            (
+                Name: expression
+                Value: nested.call()
+                (
+                    Name: chain_identifier
+                    Value: nested.call
+                    (
+                        Name: composed_identifier
+                        Value: nested.call
+                        (
+                            Name: identifier
+                            Value: nested
+                            (
+                                Name: name
+                                Value: nested
+                            )
+                        )
+                        (
+                            Name: Anonymous
+                            Value: .call
+                            (
+                                Name: .
+                                Value: .
+                            )
+                            (
+                                Name: identifier
+                                Value: call
+                                (
+                                    Name: name
+                                    Value: call
+                                )
+                            )
+                        )
+                    )
+                )
+                (
+                    Name: (
+                    Value: (
+                )
+                (
+                    Name: )
+                    Value: )
+                )
+            )
+            (
+                Name: .
+                Value: .
+            )
+            (
+                Name: chain_call
+                Value: anotherCall()
+                (
+                    Name: chain_identifier
+                    Value: anotherCall
+                    (
+                        Name: identifier
+                        Value: anotherCall
+                        (
+                            Name: name
+                            Value: anotherCall
+                        )
+                    )
+                )
+                (
+                    Name: (
+                    Value: (
+                )
+                (
+                    Name: )
+                    Value: )
+                )
+            )
+        )
+        (
+            Name: ;
+            Value: ;
+        )
+    )
+)

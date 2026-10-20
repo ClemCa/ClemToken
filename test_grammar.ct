@@ -9,7 +9,7 @@ $comment_end:simple: */
 $comment_escape:simple: \\
 
 # MAIN
-@statement: [@import | @declaration | @call | @guarded | @plain] ;
+@statement: [@import | @declaration | @call | @chain_call | @guarded | @plain] ;
 
 ## STATEMENTS
 @import: import @identifier (. @identifier)* from @identifier
@@ -29,6 +29,15 @@ $comment_escape:simple: \\
 ## FUNCS
 @call: @identifier ( (@arguments):? )
 @lambda: [inline:(( parameters:(@implicit_parameters):? ) => @expression): | long:(( parameters:(@implicit_parameters):? ) => body:({ statements:(@statement):* })):]
+
+## CALL CHAINS
+# Regression: chain_call -> chain_method_call -> chain_call is an indirect leading cycle, not a
+# left-recursive operator chain. The normaliser must leave these nodes alone; 1.8.2 crashed here.
+@chain_call: @>( [@chain_method_call | @chain_simple_call]
+@chain_method_call?: @>. expression:@chain_call . @chain_call
+@chain_simple_call?: @chain_identifier ( )
+@chain_identifier: [@composed_identifier | @identifier]
+@composed_identifier: @identifier (. @identifier)+
 
 ## VALUES
 @literal: [@string | @number | @boolean]
